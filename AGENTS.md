@@ -6,6 +6,7 @@
 - `resources/` holds board photos and LED mapping data; use `resources/ClockDisplayMapping/Master Mapping.csv` for the authoritative map.
 - `Legacy Arduino Sketches/` contains standalone sketches; each folder must match its `.ino` file name.
 - Do not modify anything under `managed_components/`. Use `sdkconfig`/`sdkconfig.defaults` for feature toggles instead.
+- `sdkconfig` is auto-generated; only edit `sdkconfig.defaults`.
 
 ## Build, Test, and Development Commands
 - Primary toolchain is ESP-IDF (Matter over Thread, with Arduino-ESP32 components as needed).
@@ -28,6 +29,7 @@
 - Validate on hardware: confirm mux stability (no flicker/uneven brightness), I2C sensors respond (BME680, VEML7700, DS3231), and TLC/TBD drive paths behave.
 - If mapping or mux timing changes, verify against `resources/ClockDisplayMapping/Master Mapping.csv`.
 - A display wiring test mode exists via `DISPLAY_TEST_MODE` in `main/main.cpp`; when enabled it cycles digits 0–9 and then lights all segments plus indicators.
+- Commissioning currently succeeds; IAQ endpoint is still not reporting correctly (open item).
 
 ## Hardware & Integration Notes
 - Target board: Seeed XIAO ESP32-C6.
