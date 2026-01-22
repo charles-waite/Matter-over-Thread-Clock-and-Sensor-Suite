@@ -13,6 +13,7 @@
 #include "driver/i2c_master.h"
 #include "driver/spi_master.h"
 #include "driver/uart.h"
+#include "soc/soc_caps.h"
 #if __has_include("driver/usb_serial_jtag.h")
 #include "driver/usb_serial_jtag.h"
 #define ESP_CLOCK_HAS_USB_SERIAL_JTAG 1
@@ -28,6 +29,9 @@
 #include "esp_openthread.h"
 #include <openthread/link.h>
 #include <openthread/thread.h>
+#if __has_include(<openthread/thread_ftd.h>)
+#include <openthread/thread_ftd.h>
+#endif
 #define ESP_CLOCK_HAS_OPENTHREAD 1
 #else
 #define ESP_CLOCK_HAS_OPENTHREAD 0
@@ -35,9 +39,16 @@
 
 #if __has_include("esp_matter.h")
 #include "esp_matter.h"
+#if __has_include("platform/ESP32/OpenthreadLauncher.h")
+#include "platform/ESP32/OpenthreadLauncher.h"
+#define ESP_CLOCK_HAS_OT_LAUNCHER 1
+#else
+#define ESP_CLOCK_HAS_OT_LAUNCHER 0
+#endif
 #define ESP_CLOCK_HAS_MATTER 1
 #else
 #define ESP_CLOCK_HAS_MATTER 0
+#define ESP_CLOCK_HAS_OT_LAUNCHER 0
 #endif
 
 // -------------------- Logging --------------------
@@ -197,9 +208,57 @@ static void configureThreadRouterEligibility() {
   mode.mDeviceType = true;
   mode.mNetworkData = true;
   otThreadSetLinkMode(instance, mode);
+#if OPENTHREAD_FTD
   otThreadSetRouterEligible(instance, true);
 #endif
+#endif
 }
+
+#if ESP_CLOCK_HAS_OT_LAUNCHER
+static void init_openthread_nvs() {
+  esp_err_t err = nvs_flash_init_partition("ot");
+  if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+    ESP_LOGW(TAG, "OT NVS init failed (%s), erasing", esp_err_to_name(err));
+    ESP_ERROR_CHECK(nvs_flash_erase_partition("ot"));
+    err = nvs_flash_init_partition("ot");
+  }
+  if (err != ESP_OK) {
+    ESP_LOGE(TAG, "OT NVS init failed: %s", esp_err_to_name(err));
+    return;
+  }
+
+  nvs_handle_t handle;
+  err = nvs_open_from_partition("ot", "openthread", NVS_READWRITE, &handle);
+  if (err == ESP_OK) {
+    nvs_close(handle);
+    ESP_LOGI(TAG, "OT NVS partition ready");
+  } else {
+    ESP_LOGE(TAG, "OT NVS open failed: %s", esp_err_to_name(err));
+  }
+}
+
+static void init_openthread_platform_config() {
+#if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_OPENTHREAD_ENABLED
+  esp_openthread_platform_config_t config = {};
+#if SOC_IEEE802154_SUPPORTED
+  config.radio_config.radio_mode = RADIO_MODE_NATIVE;
+#else
+  config.radio_config.radio_mode = RADIO_MODE_UART_RCP;
+#endif
+  // No OT CLI host interface; avoids UART init with unset config.
+  config.host_config.host_connection_mode = HOST_CONNECTION_MODE_NONE;
+  config.port_config.storage_partition_name = "ot";
+  config.port_config.netif_queue_size = 10;
+  config.port_config.task_queue_size = 10;
+  esp_err_t err = set_openthread_platform_config(&config);
+  if (err == ESP_OK) {
+    ESP_LOGI(TAG, "OpenThread platform config set");
+  } else {
+    ESP_LOGE(TAG, "set_openthread_platform_config failed: %s", esp_err_to_name(err));
+  }
+#endif
+}
+#endif
 
 #if ESP_CLOCK_HAS_MATTER
 static uint16_t matterTempEndpoint = 0;
@@ -306,8 +365,15 @@ static void matter_update() {
   if (matterAirEndpoint) {
     uint8_t aq = iaq_to_air_quality_enum(vIAQ);
     esp_matter_attr_val_t attr = esp_matter_enum8(aq);
-    esp_matter::attribute::update(matterAirEndpoint, AirQuality::Id,
-                                  AirQuality::Attributes::AirQuality::Id, &attr);
+    static bool airQualityOk = true;
+    if (airQualityOk) {
+      esp_err_t err = esp_matter::attribute::report(matterAirEndpoint, AirQuality::Id,
+                                                   AirQuality::Attributes::AirQuality::Id, &attr);
+      if (err != ESP_OK) {
+        ESP_LOGW(TAG, "AirQuality report failed: %s (disabling updates)", esp_err_to_name(err));
+        airQualityOk = false;
+      }
+    }
   }
 #endif
 }
@@ -970,9 +1036,18 @@ static uint16_t scale_brightness(uint16_t als) {
 static void sensor_task(void*) {
   uint32_t lastLuxMs = 0;
   uint32_t lastLogMs = 0;
+  bool threadConfigured = false;
   while (true) {
     if (!env.run()) {
       ESP_LOGW(TAG, "BSEC run returned false");
+    }
+    if (!threadConfigured) {
+#if ESP_CLOCK_HAS_MATTER && ESP_CLOCK_HAS_OPENTHREAD
+      if (esp_matter::is_started()) {
+        configureThreadRouterEligibility();
+        threadConfigured = true;
+      }
+#endif
     }
     matter_update();
     uint32_t now = millis_ms();
@@ -1004,12 +1079,18 @@ static void sensor_task(void*) {
 
 extern "C" void app_main() {
   ESP_ERROR_CHECK(nvs_flash_init());
+#if ESP_CLOCK_HAS_OT_LAUNCHER
+  init_openthread_nvs();
+#endif
   uart_driver_install(UART_NUM_0, 1024, 0, 0, nullptr, 0);
 #if ESP_CLOCK_HAS_USB_SERIAL_JTAG
   usb_serial_jtag_driver_config_t usb_cfg = {};
   usb_cfg.rx_buffer_size = 1024;
   usb_cfg.tx_buffer_size = 1024;
   usb_serial_jtag_driver_install(&usb_cfg);
+#endif
+#if ESP_CLOCK_HAS_OT_LAUNCHER
+  init_openthread_platform_config();
 #endif
 
   init_i2c();
@@ -1029,7 +1110,6 @@ extern "C" void app_main() {
   } else {
     ESP_LOGW(TAG, "RTC status read failed");
   }
-  configureThreadRouterEligibility();
   matter_init();
 
   display.init();
