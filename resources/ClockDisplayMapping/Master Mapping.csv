@@ -1,0 +1,103 @@
+TD Pin 1 (CA1),,,,
+0,-,,,
+1,-,,,
+2,-,,,
+3,-,,,
+4,-,,,
+5,-,,,
+6,-,,,
+7,-,,,
+8,A2,Clock ,Digit 2, Segment A
+9,B2,Clock ,Digit 2, Segment B
+10,F2,Clock ,Digit 2, Segment F
+11,-,,,
+12,C8,Temp ,Digit 8, Segment C
+13,E8,Temp ,Digit 8, Segment E
+14,B8,Temp ,Digit 8, Segment B
+15,D8,Temp ,Digit 8, Segment D
+16,-,,,
+17,A8,Temp ,Digit 8, Segment A
+18,G8,Temp ,Digit 8, Segment G
+19,F8,Temp ,Digit 8, Segment F
+20,C2,Clock ,Digit 2, Segment C
+21,D2,Clock ,Digit 2, Segment D
+22,G2,Clock ,Digit 2, Segment G
+23,E2,Clock ,Digit 2, Segment E
+,,,,
+TD Pin 2 (CA2),,,,
+0,F6,Humidity,Digit 6, Segment F
+1,G6,Humidity,Digit 6, Segment G
+2,A6,Humidity,Digit 6, Segment A
+3,-,,,
+4,D6,Humidity,Digit 6, Segment D
+5,B6,Humidity,Digit 6, Segment B
+6,E6,Humidity,Digit 6, Segment E
+7,C6,Humidity,Digit 6, Segment D
+8,A4,Clock ,Digit 4, Segment A
+9,B4,Clock ,Digit 4, Segment B
+10,F4,Clock ,Digit 4, Segment F
+11,UpperDot4,Clock ,Upper Dot,
+12,C10,Temperature,Digit 10, Segment C
+13,E10,Temperature,Digit 10, Segment E
+14,B10,Temperature,Digit 10, Segment B
+15,D10,Temperature,Digit 10, Segment D
+16,DegreesDot10,Temperature,Degrees Dot 10,
+17,A10,Temperature,Digit 10, Segment A
+18,G10,Temperature,Digit 10, Segment G
+19,F10,Temperature,Digit 10, Segment F
+20,C4,Clock ,Digit 4, Segment C
+21,D4,Clock ,Digit 4, Segment D
+22,G4,Clock ,Digit 4, Segment G
+23,E4,Clock ,Digit 4, Segment E
+,,,,
+TD Pin 3 (CA3),,,,
+0,-,,,
+1,-,,,
+2,-,,,
+3,-,,,
+4,-,,,
+5,-,,,
+6,-,,,
+7,-,,,
+8,A1,Clock ,Digit 1, Segment A
+9,B1,Clock ,Digit 1, Segment B
+10,F1,Clock ,Digit 1, Segment F
+11,AM/PM,Clock ,AM-PM Dot,
+12,C7,Temperature,Digit 7, Segment C
+13,E7,Temperature,Digit 7, Segment E
+14,B7,Temperature,Digit 7, Segment B
+15,D7,Temperature,Digit 7, Segment D
+16,DegreesDot7,Temperature,Degrees Dot 7,
+17,A7,Temperature,Digit 7, Segment A
+18,G7,Temperature,Digit 7, Segment G
+19,F7,Temperature,Digit 7, Segment F
+20,C1,Clock ,Digit 1, Segment C
+21,D1,Clock ,Digit 1, Segment D
+22,G1,Clock ,Digit 1, Segment G
+23,E1,Clock ,Digit 1, Segment E
+,,,,
+TD Pin  4 (CA4),,,,
+0,F5,Humidity,Digit 5, Segment F
+1,G5,Humidity,Digit 5, Segment G
+2,A5,Humidity,Digit 5, Segment A
+3,%RH,Humidity,Relative Humidity Cluster,
+4,D5,Humidity,Digit 5, Segment D
+5,B5,Humidity,Digit 5, Segment B
+6,E5,Humidity,Digit 5, Segment E
+7,C5,Humidity,Digit 5, Segment C
+8,A3,Clock ,Digit 3, Segment A
+9,B3,Clock ,Digit 3, Segment B
+10,F3,Clock ,Digit 3, Segment F
+11,Colon ,Clock,Colon,
+12,C9,Temperature,Digit 9, Segment C
+13,E9,Temperature,Digit 9, Segment E
+14,B9,Temperature,Digit 9, Segment B
+15,D9,Temperature,Digit 9, Segment D
+16,Decimal,Temperature,Decimal,
+17,A9,Temperature,Digit 9, Segment A
+18,G9,Temperature,Digit 9, Segment G
+19,F9,Temperature,Digit 9, Segment F
+20,C3,Clock ,Digit 3, Segment C
+21,D3,Clock ,Digit 3, Segment D
+22,G3,Clock ,Digit 3, Segment G
+23,E3,Clock ,Digit 3, Segment E

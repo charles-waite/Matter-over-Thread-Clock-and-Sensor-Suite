@@ -1,12 +1,6 @@
 # CMake build output
 build/
-cmake-build-*/
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-compile_commands.json
-CTestTestfile.cmake
-Makefile
+managed_components/
 
 # Ninja
 .ninja_deps
