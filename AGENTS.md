@@ -5,6 +5,7 @@
 - `components/bsec2/` is the Bosch BSEC2 library for the BME680 sensor.
 - `resources/` holds board photos and LED mapping data; use `resources/ClockDisplayMapping/Master Mapping.csv` for the authoritative map.
 - `Legacy Arduino Sketches/` contains standalone sketches; each folder must match its `.ino` file name.
+- Do not modify anything under `managed_components/`. Use `sdkconfig`/`sdkconfig.defaults` for feature toggles instead.
 
 ## Build, Test, and Development Commands
 - Primary toolchain is ESP-IDF (Matter over Thread, with Arduino-ESP32 components as needed).
@@ -12,6 +13,7 @@
   - `idf.py set-target esp32c6`
   - `idf.py build`
   - `idf.py -p <port> flash monitor`
+- On this machine, ESP-Matter builds can take up to ~5 minutes; set build timeouts accordingly.
 - Legacy sketches are reference-only; if needed, build via Arduino IDE or:
   - `arduino-cli compile --fqbn <board_fqbn> "Legacy Arduino Sketches/Clock_StableDisplayandTime"`
   - `arduino-cli upload --fqbn <board_fqbn> -p <port> "Legacy Arduino Sketches/Clock_StableDisplayandTime"`
@@ -29,7 +31,7 @@
 
 ## Hardware & Integration Notes
 - Target board: Seeed XIAO ESP32-C6.
-- Display chain: TLC5947 (24-channel cathode sink over I2C) + TBD62783APG (4 GPIO common-anode drivers) multiplexing 10x 7-segment displays.
+- Display chain: TLC5947 (24-channel cathode sink over SPI) + TBD62783APG (4 GPIO common-anode drivers) multiplexing 10x 7-segment displays.
 - Sensors: BME680 (BSEC2), VEML7700 ambient light, DS3231 RTC.
 - Prefer ESP-IDF drivers for I2C/GPIO/PWM; use Arduino APIs only when required by a component.
 

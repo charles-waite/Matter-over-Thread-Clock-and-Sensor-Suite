@@ -1,0 +1,1398 @@
+I (23) boot: ESP-IDF v5.5.2-227-g913c2b4f10 2nd stage bootloader
+I (23) boot: compile time Jan 21 2026 23:17:06
+I (24) boot: chip revision: v0.1
+I (24) boot: efuse block revision: v0.3
+I (28) boot.esp32c6: SPI Speed      : 80MHz
+I (32) boot.esp32c6: SPI Mode       : DIO
+I (35) boot.esp32c6: SPI Flash Size : 4MB
+I (39) boot: Enabling RNG early entropy source...
+I (44) boot: Partition Table:
+I (46) boot: ## Label            Usage          Type ST Offset   Length
+I (53) boot:  0 esp_secure_cert  unknown          3f 06 0000d000 00002000
+I (59) boot:  1 nvs              WiFi data        01 02 00010000 0000c000
+I (66) boot:  2 nvs_keys         NVS keys         01 04 0001c000 00001000
+I (72) boot:  3 otadata          OTA data         01 00 0001d000 00002000
+I (79) boot:  4 phy_init         RF data          01 01 0001f000 00001000
+I (85) boot:  5 ota_0            OTA app          00 10 00020000 001e0000
+I (92) boot:  6 ota_1            OTA app          00 11 00200000 001e0000
+I (98) boot:  7 ot               WiFi data        01 02 003e0000 00006000
+I (105) boot: End of partition table
+I (108) boot: No factory image, trying OTA 0
+I (112) esp_image: segment 0: paddr=00020020 vaddr=42170020 size=39d04h (236804) map
+I (165) esp_image: segment 1: paddr=00059d2c vaddr=40800000 size=062ech ( 25324) load
+I (171) esp_image: segment 2: paddr=00060020 vaddr=42000020 size=16c768h (1492840) map
+I (456) esp_image: segment 3: paddr=001cc790 vaddr=408062ec size=14dfch ( 85500) load
+I (475) esp_image: segment 4: paddr=001e1594 vaddr=4081b0f0 size=02e10h ( 11792) load
+I (485) boot: Loaded app from partition at offset 0x20000
+I (530) boot: Set actual ota_seq=1 in otadata[0]
+I (530) boot: Disabling RNG early entropy source...
+I (540) cpu_start: Unicore app
+I (548) cpu_start: GPIO 17 and 16 are used as console UART I/O pins
+I (549) cpu_start: Pro cpu start user code
+I (549) cpu_start: cpu freq: 160000000 Hz
+I (551) app_init: Application information:
+I (554) app_init: Project name:     esp_clock
+I (559) app_init: App version:      7a2f150-dirty
+I (563) app_init: Compile time:     Jan 22 2026 08:46:55
+I (568) app_init: ELF file SHA256:  c278147f5...
+I (572) app_init: ESP-IDF:          v5.5.2-227-g913c2b4f10
+I (578) efuse_init: Min chip rev:     v0.0
+I (581) efuse_init: Max chip rev:     v0.99 
+I (585) efuse_init: Chip rev:         v0.1
+I (589) heap_init: Initializing. RAM available for dynamic allocation:
+I (595) heap_init: At 408339E0 len 00048C30 (291 KiB): RAM
+I (601) heap_init: At 4087C610 len 00002F54 (11 KiB): RAM
+I (606) heap_init: At 50000000 len 00003FE8 (15 KiB): RTCRAM
+I (612) spi_flash: detected chip: generic
+I (615) spi_flash: flash io: dio
+I (619) sleep_gpio: Configure to isolate all GPIO pins in sleep state
+I (624) sleep_gpio: Enable automatic switching of GPIO sleep configuration
+I (639) main_task: Started on CPU0
+I (639) main_task: Calling app_main()
+I (659) esp_clock: OT NVS partition ready
+I (659) esp_clock: OpenThread platform config set
+I (679) esp_clock: RTC status OK (OSF=0)
+I (699) chip[DL]: NVS set: chip-counters/reboot-count = 4 (0x4)
+I (699) chip[DL]: Real time clock set to 946684800 (1999-12-31 16:00:00 UTC)
+I (699) BLE_INIT: Using main XTAL as clock source, chip ver: 1
+I (699) BLE_INIT: ble controller commit:[b6027ae]
+I (709) BLE_INIT: Bluetooth MAC: e4:b3:23:ad:89:d6
+I (709) phy_init: phy_version 343,b513b46,Nov 14 2025,16:34:12
+I (709) OPENTHREAD: Host connection mode none
+I (789) phy: libbtbb version: c493933, Nov 14 2025, 16:34:25
+I (799) NimBLE: GAP procedure initiated: stop advertising.
+
+I (799) CHIP[DL]: BLE host-controller synced
+I(799) OPENTHREAD:[I] CslTxScheduler: Set frame request ahead: 20000 usec
+I(799) OPENTHREAD:[I] ChildSupervsn-: Timeout: 0 -> 190
+I(809) OPENTHREAD:[I] Settings------: Read NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x24, ...
+I(819) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0xbc1, maccntr:0xbcb, mliid:8ce20abed75504ff}
+I (829) OPENTHREAD: OpenThread attached to netif
+I (839) chip[DL]: OpenThread started: OK
+I (839) chip[DL]: Setting OpenThread device type to ROUTER
+I(849) OPENTHREAD:[I] Notifier------: StateChanged (0x00038310) [MLAddr KeySeqCntr NetData PanId NetName ExtPanId]
+I(859) OPENTHREAD:[I] BbrLeader-----: PBBR state: None
+I(859) OPENTHREAD:[I] RouterTable---: Route table
+I (1329) chip[SVR]: Initializing subscription resumption storage...
+I (1329) chip[SVR]: Server initializing...
+I (1329) chip[TS]: Last Known Good Time: 2026-01-22T08:30:41
+I (1329) chip[TS]: Setting Last Known Good Time to firmware build time 2026-01-22T16:46:33
+I (1349) chip[DMG]: AccessControl: initializing
+I (1349) chip[DMG]: Examples::AccessControlDelegate::Init
+I (1349) chip[DMG]: AccessControl: setting
+I (1349) chip[DMG]: DefaultAclStorage: initializing
+I (1359) chip[DMG]: DefaultAclStorage: 0 entries loaded
+I (1359) chip[SVR]: WARNING: mTestEventTriggerDelegate is null
+I (1379) chip[ZCL]: Using ZAP configuration...
+I (1379) esp_matter_cluster: Cluster plugin init common callback
+I (1379) chip[DMG]: AccessControlCluster: initializing
+I (1379) chip[ZCL]: WRITE ERR: ep 0 clus 0x0000_0030 attr 0x0000_0000 not supported
+I (1389) chip[DIS]: Updating services using commissioning mode 1
+I (1399) chip[DIS]: CHIP minimal mDNS started advertising.
+I (1399) chip[DIS]: Advertise commission parameter vendorID=65521 productID=32768 discriminator=3840/15 cm=1 cp=0
+I (1409) chip[DIS]: CHIP minimal mDNS configured as 'Commissionable node device'; instance name: A7D9AB25F4EDCE9A.
+I (1419) chip[DIS]: mDNS service published: _matterc._udp
+I (1429) chip[IN]: CASE Server enabling CASE session setups
+I (1429) chip[SVR]: Joining Multicast groups
+I (1439) chip[SVR]: Server Listening...
+I (1439) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x0000003C's Attribute 0x0000FFFC is 0 **********
+I (1449) data_model: Dynamic endpoint 0 added
+I (1459) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000003's Attribute 0x00000001 is 2 **********
+I (1469) data_model: Dynamic endpoint 1 added
+I (1469) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000003's Attribute 0x00000001 is 2 **********
+I (1479) data_model: Dynamic endpoint 2 added
+I (1479) esp_matter_attribute: ********** R : Endpoint 0x0003's Cluster 0x00000003's Attribute 0x00000001 is 2 **********
+I (1499) data_model: Dynamic endpoint 3 added
+I (1499) esp_clock: Matter started (temp=1 hum=2 air=3)
+I (1509) chip[DL]: Configuring CHIPoBLE advertising (interval 25 ms, connectable)
+I (1509) NimBLE: GAP procedure initiated: advertise; 
+I (1519) NimBLE: disc_mode=2
+I (1519) NimBLE:  adv_channel_map=0 own_addr_type=1 adv_filter_policy=0 adv_itvl_min=40 adv_itvl_max=40
+I (1529) NimBLE: 
+
+I (1529) esp_clock: display host=SPI2 MOSI=18 SCK=19 LATCH=20 CA1=0 CA2=1 CA3=2 CA4=21
+I (1539) esp_clock: display page period = 1000 us (frame 250.0 Hz)
+I (1529) chip[DL]: CHIPoBLE advertising started
+I (1549) main_task: Returned from app_main()
+I (5809) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 63.5 F | RH 55.3%
+I (11009) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 64.6 F | RH 52.9%
+I (15809) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is null **********
+I (15809) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1826 **********
+I (15819) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is null **********
+I (15829) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5214 **********
+E (15839) data_model: get_val(828): Attribute is not managed by esp matter data model
+E (15849) esp_matter_attribute: Attribute type mismatch when trying to report Endpoint 0x0003's Cluster 0x0000005B's Attribute 0x00000000
+W (15859) esp_clock: AirQuality report failed: ESP_FAIL (disabling updates)
+I (16069) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 64.9 F | RH 52.1%
+I (21269) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 65.0 F | RH 51.6%
+I (26469) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 65.1 F | RH 51.4%
+I (29289) chip[DL]: BLE GAP connection established (con 0)
+I (29289) chip[DL]: CHIPoBLE advertising stopped
+I (30129) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (30129) chip[BLE]: local and remote recv window sizes = 5
+I (30129) chip[BLE]: selected BTP version 4
+I (30129) chip[BLE]: using BTP fragment sizes rx 244 / tx 244.
+I (30309) chip[DL]: Write request/command received for CHIPoBLE TX CCCD characteristic (con 0 ) indicate = 1
+I (30309) chip[DL]: CHIPoBLE subscribe received
+I (30309) NimBLE: GATT procedure initiated: indicate; 
+I (30309) NimBLE: att_handle=18
+
+I (30369) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (30369) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (30369) chip[EM]: >>> [E:26030r S:0 M:180363829] (U) Msg RX from 0:C3A7999E8729DB1F [0000] to 0000000000000000 --- Type 0000:20 (SecureChannel:PBKDFParamRequest) (B:98)
+I (30389) chip[EM]: <<< [E:26030r S:0 M:10606103] (U) Msg TX from 0000000000000000 to 0:C3A7999E8729DB1F [0000] [BLE] --- Type 0000:21 (SecureChannel:PBKDFParamResponse) (B:154)
+I (30399) NimBLE: GATT procedure initiated: indicate; 
+I (30409) NimBLE: att_handle=18
+
+I (30409) chip[SVR]: Commissioning session establishment step started
+I (30459) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (30459) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (30459) chip[EM]: >>> [E:26030r S:0 M:180363830] (U) Msg RX from 0:C3A7999E8729DB1F [0000] to 0000000000000000 --- Type 0000:22 (SecureChannel:PASE_Pake1) (B:92)
+I (30559) chip[EM]: <<< [E:26030r S:0 M:10606104] (U) Msg TX from 0000000000000000 to 0:C3A7999E8729DB1F [0000] [BLE] --- Type 0000:23 (SecureChannel:PASE_Pake2) (B:127)
+I (30569) NimBLE: GATT procedure initiated: indicate; 
+I (30569) NimBLE: att_handle=18
+
+I (30639) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (30639) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (30639) chip[EM]: >>> [E:26030r S:0 M:180363831] (U) Msg RX from 0:C3A7999E8729DB1F [0000] to 0000000000000000 --- Type 0000:24 (SecureChannel:PASE_Pake3) (B:59)
+I (30659) chip[EM]: <<< [E:26030r S:0 M:10606105] (U) Msg TX from 0000000000000000 to 0:C3A7999E8729DB1F [0000] [BLE] --- Type 0000:40 (SecureChannel:StatusReport) (B:30)
+I (30669) NimBLE: GATT procedure initiated: indicate; 
+I (30679) NimBLE: att_handle=18
+
+I (30679) chip[SC]: SecureSession[0x40822738, LSID:32432]: State change 'kEstablishing' --> 'kActive'
+I (30689) chip[SVR]: Commissioning completed session establishment step
+I (30699) chip[DIS]: Updating services using commissioning mode 0
+I (30699) chip[DIS]: CHIP minimal mDNS started advertising.
+I (30709) chip[SVR]: Device completed Rendezvous process
+I (30709) esp_clock: Matter commissioning session started
+I (30759) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (30759) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (30769) chip[EM]: >>> [E:26031r S:32432 M:212989190] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:02 (IM:ReadRequest) (B:136)
+E (30789) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x0000_0030, attributeId: 0x0000_000Cerr = 586
+I (30789) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 0 **********
+I (30809) chip[EM]: <<< [E:26031r S:32432 M:264592405] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:05 (IM:ReportData) (B:253)
+I (30819) NimBLE: GATT procedure initiated: indicate; 
+I (30819) NimBLE: att_handle=18
+
+I (30869) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1826 **********
+I (30869) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1817 **********
+I (30879) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (30889) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5214 **********
+I (30899) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5235 **********
+I (30909) NimBLE: GATT procedure initiated: indicate; 
+I (30909) NimBLE: att_handle=18
+
+I (30969) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (30969) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (30979) chip[EM]: >>> [E:26032r S:32432 M:212989191] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:02 (IM:ReadRequest) (B:128)
+E (30999) chip[DMG]: Read request on unknown cluster - no data version available
+E (30999) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x0000_0046, attributeId: 0x0000_0002err = 5c3
+E (31009) chip[DMG]: Read request on unknown cluster - no data version available
+E (31019) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x0000_0046, attributeId: 0x0000_0001err = 5c3
+E (31029) chip[DMG]: Read request on unknown cluster - no data version available
+E (31029) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x0000_0046, attributeId: 0x0000_0000err = 5c3
+E (31049) chip[DMG]: Read request on unknown cluster - no data version available
+E (31049) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x0000_0046, attributeId: 0x0000_0007err = 5c3
+E (31059) chip[DMG]: Read request on unknown cluster - no data version available
+E (31069) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x0000_0046, attributeId: 0x0000_0006err = 5c3
+I (31089) chip[EM]: <<< [E:26032r S:32432 M:264592406] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:05 (IM:ReportData) (B:456)
+I (31099) NimBLE: GATT procedure initiated: indicate; 
+I (31099) NimBLE: att_handle=18
+
+I (31179) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31179) NimBLE: GATT procedure initiated: indicate; 
+I (31179) NimBLE: att_handle=18
+
+I (31239) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31269) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (31269) chip[EM]: >>> [E:26033r S:32432 M:212989192] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:02 (IM:ReadRequest) (B:73)
+E (31279) chip[DMG]: Read request on unknown cluster - no data version available
+E (31289) chip[DMG]: Fail to retrieve data, roll back and encode status on clusterId: 0x1349_FC00, attributeId: 0x0000_0001err = 5c3
+I (31299) chip[EM]: <<< [E:26033r S:32432 M:264592407] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:05 (IM:ReportData) (B:161)
+I (31309) NimBLE: GATT procedure initiated: indicate; 
+I (31319) NimBLE: att_handle=18
+
+I (31359) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31359) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (31369) chip[EM]: >>> [E:26034r S:32432 M:212989193] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:65)
+I (31379) chip[FS]: GeneralCommissioning: Received ArmFailSafe (60s)
+I (31379) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 0 **********
+I (31389) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 3 **********
+I (31409) chip[EM]: <<< [E:26034r S:32432 M:264592408] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (31419) NimBLE: GATT procedure initiated: indicate; 
+I (31419) NimBLE: att_handle=18
+
+I (31509) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31509) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (31509) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 64.7 F | RH 52.4%
+I (31519) chip[EM]: >>> [E:26035r S:32432 M:212989194] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:70)
+I (31539) chip[DL]: NVS set: chip-config/reg-location = 0 (0x0)
+I (31539) chip[DL]: NVS set: chip-config/country-code = "US"
+I (31549) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 3 **********
+I (31559) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 4 **********
+I (31569) chip[EM]: <<< [E:26035r S:32432 M:264592409] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (31579) NimBLE: GATT procedure initiated: indicate; 
+I (31589) NimBLE: att_handle=18
+
+I (31629) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31629) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (31639) chip[EM]: >>> [E:26036r S:32432 M:212989195] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:62)
+I (31649) esp_matter_command: Received command 0x00000002 for endpoint 0x0000's cluster 0x0000003E
+I (31659) chip[ZCL]: OpCreds: Certificate Chain request received for PAI
+I (31669) chip[EM]: <<< [E:26036r S:32432 M:264592410] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:527)
+I (31679) NimBLE: GATT procedure initiated: indicate; 
+I (31679) NimBLE: att_handle=18
+
+I (31749) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31749) NimBLE: GATT procedure initiated: indicate; 
+I (31749) NimBLE: att_handle=18
+
+I (31839) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31839) NimBLE: GATT procedure initiated: indicate; 
+I (31839) NimBLE: att_handle=18
+
+I (31899) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (31899) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (31909) chip[EM]: >>> [E:26037r S:32432 M:212989196] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:62)
+I (31919) esp_matter_command: Received command 0x00000002 for endpoint 0x0000's cluster 0x0000003E
+I (31929) chip[ZCL]: OpCreds: Certificate Chain request received for DAC
+I (31939) chip[EM]: <<< [E:26037r S:32432 M:264592411] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:557)
+I (31949) NimBLE: GATT procedure initiated: indicate; 
+I (31949) NimBLE: att_handle=18
+
+I (32049) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (32049) NimBLE: GATT procedure initiated: indicate; 
+I (32049) NimBLE: att_handle=18
+
+I (32109) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (32109) NimBLE: GATT procedure initiated: indicate; 
+I (32109) NimBLE: att_handle=18
+
+I (32169) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (32169) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (32179) chip[EM]: >>> [E:26038r S:32432 M:212989197] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:94)
+I (32189) esp_matter_command: Received command 0x00000000 for endpoint 0x0000's cluster 0x0000003E
+I (32199) chip[ZCL]: OpCreds: Received an AttestationRequest command
+I (32229) chip[ZCL]: OpCreds: AttestationRequest successful.
+I (32239) chip[EM]: <<< [E:26038r S:32432 M:264592412] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:714)
+I (32249) NimBLE: GATT procedure initiated: indicate; 
+I (32249) NimBLE: att_handle=18
+
+I (32289) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (32289) NimBLE: GATT procedure initiated: indicate; 
+I (32289) NimBLE: att_handle=18
+
+I (32349) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (32349) NimBLE: GATT procedure initiated: indicate; 
+I (32349) NimBLE: att_handle=18
+
+I (32409) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (32409) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (32419) chip[EM]: >>> [E:26039r S:32432 M:212989198] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:65)
+I (32429) chip[FS]: GeneralCommissioning: Received ArmFailSafe (60s)
+I (32429) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 4 **********
+I (32439) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 13 **********
+I (32459) chip[EM]: <<< [E:26039r S:32432 M:264592413] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (32469) NimBLE: GATT procedure initiated: indicate; 
+I (32469) NimBLE: att_handle=18
+
+I (32529) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (33309) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (33309) chip[EM]: >>> [E:26040r S:32432 M:212989199] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:94)
+I (33319) esp_matter_command: Received command 0x00000004 for endpoint 0x0000's cluster 0x0000003E
+I (33329) chip[ZCL]: OpCreds: Received a CSRRequest command
+I (33369) chip[ZCL]: OpCreds: AllocatePendingOperationalKey succeeded
+I (33409) chip[ZCL]: OpCreds: CSRRequest successful.
+I (33409) chip[EM]: <<< [E:26040r S:32432 M:264592414] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:372)
+I (33419) NimBLE: GATT procedure initiated: indicate; 
+I (33419) NimBLE: att_handle=18
+
+I (33459) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (33459) NimBLE: GATT procedure initiated: indicate; 
+I (33459) NimBLE: att_handle=18
+
+I (33519) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (33549) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (33639) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (33639) chip[EM]: >>> [E:26041r S:32432 M:212989200] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:308)
+I (33649) esp_matter_command: Received command 0x0000000B for endpoint 0x0000's cluster 0x0000003E
+I (33659) chip[ZCL]: OpCreds: Received an AddTrustedRootCertificate command
+I (33719) chip[ZCL]: OpCreds: AddTrustedRootCertificate successful.
+I (33729) chip[EM]: <<< [E:26041r S:32432 M:264592415] (S) Msg TX from 0000000000000000 to 0:FFFFFFFB00000000 [0000] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:63)
+I (33739) NimBLE: GATT procedure initiated: indicate; 
+I (33739) NimBLE: att_handle=18
+
+I (33789) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (33789) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (33849) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (33849) chip[EM]: >>> [E:26042r S:32432 M:212989201] (S) Msg RX from 0:FFFFFFFB00000000 [0000] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:347)
+I (33859) esp_matter_command: Received command 0x00000006 for endpoint 0x0000's cluster 0x0000003E
+I (33869) chip[ZCL]: OpCreds: Received an AddNOC command
+I (33869) chip[FP]: Validating NOC chain
+I (33939) chip[FP]: NOC chain validation successful
+I (33939) chip[FP]: Added new fabric at index: 0x1
+I (33939) chip[FP]: Assigned compressed fabric ID: 0x11166AD2C3262286, node ID: 0x0000000095AA71CF
+I (33949) chip[TS]: Last Known Good Time: 2026-01-22T16:46:33
+I (33949) chip[TS]: New proposed Last Known Good Time: 2026-01-22T16:52:50
+I (33959) chip[TS]: Updating pending Last Known Good Time to 2026-01-22T16:52:50
+I (33969) chip[ZCL]: OpCreds: ACL entry created for Fabric index 0x1 CASE Admin Subject 0x00000000DB4609DC
+I (33979) chip[DIS]: Advertise operational node 11166AD2C3262286-0000000095AA71CF
+I (33979) chip[DIS]: CHIP minimal mDNS configured as 'Operational device'; instance name: 11166AD2C3262286-0000000095AA71CF.
+I (33989) chip[DIS]: mDNS service published: _matter._tcp
+I (33999) chip[ZCL]: OpCreds: successfully created fabric index 0x1 via AddNOC
+I (34009) chip[EM]: <<< [E:26042r S:32432 M:264592416] (S) Msg TX from 0000000000000000 to 1:FFFFFFFB00000000 [2286] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (34019) NimBLE: GATT procedure initiated: indicate; 
+I (34029) NimBLE: att_handle=18
+
+I (34089) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (34089) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (34099) chip[EM]: >>> [E:26043r S:32432 M:212989202] (S) Msg RX from 1:FFFFFFFB00000000 [2286] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:172)
+I (34109) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 13 **********
+I (34119) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 24 **********
+I (34129) chip[EM]: <<< [E:26043r S:32432 M:264592417] (S) Msg TX from 0000000000000000 to 1:FFFFFFFB00000000 [2286] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (34139) NimBLE: GATT procedure initiated: indicate; 
+I (34149) NimBLE: att_handle=18
+
+I (34239) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (34239) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (34249) chip[EM]: >>> [E:26044r S:32432 M:212989203] (S) Msg RX from 1:FFFFFFFB00000000 [2286] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:65)
+I (34259) chip[FS]: GeneralCommissioning: Received ArmFailSafe (77s)
+I (34259) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 24 **********
+I (34269) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 26 **********
+I (34289) chip[EM]: <<< [E:26044r S:32432 M:264592418] (S) Msg TX from 0000000000000000 to 1:FFFFFFFB00000000 [2286] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (34299) NimBLE: GATT procedure initiated: indicate; 
+I (34299) NimBLE: att_handle=18
+
+I (34359) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (34359) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (34369) chip[EM]: >>> [E:26045r S:32432 M:212989204] (S) Msg RX from 1:FFFFFFFB00000000 [2286] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:73)
+I(34389) OPENTHREAD:[I] Settings------: Saved ActiveDataset
+I(34389) OPENTHREAD:[I] DatasetManager: Active dataset set
+I(34389) OPENTHREAD:[I] Mle-----------: PeriodicParentSearch: (Re)starting timer for check interval
+I(34399) OPENTHREAD:[N] Mle-----------: Role disabled -> detached
+I(34409) OPENTHREAD:[I] Mle-----------: Attempting to restore prev role: router
+I (34409) chip[DL]: Posting ESPSystemEvent: IP Event with eventId : 3
+I (34419) chip[DL]: Posting ESPSystemEvent: IP Event with eventId : 3
+I (34419) chip[DL]: Posting ESPSystemEvent: IP Event with eventId : 3
+I (34429) chip[DL]: Posting ESPSystemEvent: IP Event with eventId : 3
+I(34439) OPENTHREAD:[I] Settings------: Read NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x24, ...
+I(34449) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0xbc1, maccntr:0xbcb, mliid:8ce20abed75504ff}
+I (34459) chip[DL]: Updating advertising data
+I(34469) OPENTHREAD:[I] Settings------: Saved NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x0, ...
+I(34479) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0xfaa, maccntr:0xfb3, mliid:8ce20abed75504ff}
+I(34489) OPENTHREAD:[I] Mle-----------: Send Link Request (ff02:0:0:0:0:0:0:2)
+I(34489) OPENTHREAD:[I] Notifier------: StateChanged (0x111fd13d) [Ip6+ Role LLAddr MLAddr Rloc+ KeySeqCntr Ip6Mult+ Channel PanId NetName ...
+I(34499) OPENTHREAD:[I] Notifier------: StateChanged (0x111fd13d) ... ExtPanId NetworkKey PSKc SecPolicy NetifState ActDset]
+I(34519) OPENTHREAD:[I] Settings------: Read NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x0, ...
+I(34529) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0xfaa, maccntr:0xfb3, mliid:8ce20abed75504ff}
+I(34539) OPENTHREAD:[I] Settings------: Re-saved NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x0, ...
+I(34549) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0xfaa, maccntr:0xfb3, mliid:8ce20abed75504ff}
+I(34559) OPENTHREAD:[I] AnnounceSender: Stopped
+I(34569) OPENTHREAD:[I] AnnounceSender: ChannelMask:{ 11-25 }, period:22933
+I(34569) OPENTHREAD:[I] AnnounceSender: StartingChannel:25
+I(34579) OPENTHREAD:[I] AnnounceSender: StartingChannel:25
+I (34589) OT_STATE: netif up
+I(34599) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:ba21, ecn:no, to:0xffff, sec:no, prio:net
+I(34599) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(34609) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I (36529) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 64.3 F | RH 53.5%
+I (36859) NimBLE: GATT procedure initiated: indicate; 
+I (36859) NimBLE: att_handle=18
+
+I (36909) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (39399) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(39599) OPENTHREAD:[I] Mle-----------: Send Link Request (ff02:0:0:0:0:0:0:2)
+I(39619) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:78e9, ecn:no, to:0xffff, sec:no, prio:net
+I(39619) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(39629) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I(39739) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:a407, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-94.0
+I(39739) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(39749) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(39759) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:a407, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(39759) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(39769) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(39779) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:a407, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(39789) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(39799) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (41729) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 64.2 F | RH 54.1%
+I (41899) NimBLE: GATT procedure initiated: indicate; 
+I (41899) NimBLE: att_handle=18
+
+I (41949) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(44339) OPENTHREAD:[I] Mle-----------: Send Link Request (ff02:0:0:0:0:0:0:2)
+I(44359) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:bf66, ecn:no, to:0xffff, sec:no, prio:net
+I(44359) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(44369) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I (44439) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(45219) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:9852, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-105.0
+I(45229) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(45229) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (45929) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1817 **********
+I (45929) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1788 **********
+I (45939) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5235 **********
+I (45949) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5425 **********
+I(46349) OPENTHREAD:[I] Mle-----------: Failed to restore prev role
+I(46349) OPENTHREAD:[N] Mle-----------: RLOC16 a400 -> fffe
+I(46349) OPENTHREAD:[I] Mle-----------: AttachState Idle -> Start
+I(46349) OPENTHREAD:[I] Notifier------: StateChanged (0x00000040) [Rloc-]
+I(46679) OPENTHREAD:[N] Mle-----------: Attach attempt 1, AnyPartition reattaching with Active Dataset
+I(46679) OPENTHREAD:[I] Mle-----------: AttachState Start -> ParentReq
+I(46679) OPENTHREAD:[I] Mle-----------: Send Parent Request to routers (ff02:0:0:0:0:0:0:2)
+I(46699) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:84, chksum:b9f5, ecn:no, to:0xffff, sec:no, prio:net
+I(46699) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(46709) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I (46759) esp_clock: RTC 08:52 (AM) | Display 08:52 | Temp 64.2 F | RH 54.4%
+I (46939) NimBLE: GATT procedure initiated: indicate; 
+I (46939) NimBLE: att_handle=18
+
+I (47019) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(47239) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:f5d9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(47239) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(47249) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(47259) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(47269) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:f5d9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(47279) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(47279) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(47289) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(47309) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:f5d9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-97.0
+I(47309) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(47319) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(47329) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(47339) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:f5d9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-94.0
+I(47349) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(47359) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(47369) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(47379) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:f5d9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-97.0
+I(47389) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(47399) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(47409) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(47409) OPENTHREAD:[I] Notifier------: StateChanged (0x00000100) [KeySeqCntr]
+I(47419) OPENTHREAD:[I] Settings------: Read NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x0, ...
+I(47429) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0xfaa, maccntr:0xfb3, mliid:8ce20abed75504ff}
+I(47449) OPENTHREAD:[I] Settings------: Saved NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x24, ...
+I(47459) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0x3e8, maccntr:0x3e8, mliid:8ce20abed75504ff}
+I(47469) OPENTHREAD:[I] Mle-----------: Send Parent Request to routers (ff02:0:0:0:0:0:0:2)
+I(47479) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:84, chksum:9766, ecn:no, to:0xffff, sec:no, prio:net
+I(47479) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(47489) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I(47999) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:d166, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(47999) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(48009) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(48019) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(48039) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:cacc, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-102.0
+I(48039) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(48049) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(48059) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(48149) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:cacc, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-105.0
+I(48149) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(48159) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(48159) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(48239) OPENTHREAD:[I] Mle-----------: Send Parent Request to routers and REEDs (ff02:0:0:0:0:0:0:2)
+I(48249) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:84, chksum:76e4, ecn:no, to:0xffff, sec:no, prio:net
+I(48249) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(48259) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I(49279) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:acab, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(49279) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(49289) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(49299) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(49309) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:135, chksum:82b7, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-101.0
+I(49319) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(49329) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(49339) OPENTHREAD:[I] Mle-----------: Receive Parent Response (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I (49479) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(49509) OPENTHREAD:[I] Mle-----------: Send Child ID Request (fe80:0:0:0:f0c3:324b:18b9:9de0)
+I(49509) OPENTHREAD:[I] Mle-----------: AttachState ParentReq -> ChildIdReq
+I(49519) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:114, chksum:67e9, ecn:no, to:f2c3324b18b99de0, sec:no, prio:net
+I(49529) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(49529) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(49559) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:220, chksum:ae5e, ecn:no, from:f2c3324b18b99de0, sec:yes, prio:net, rss:-96.625
+I(49569) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(49569) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(49579) OPENTHREAD:[I] Mle-----------: Receive Child ID Response (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(49589) OPENTHREAD:[I] Settings------: Deleted PendingDataset
+I(49599) OPENTHREAD:[I] Mle-----------: AttachState ChildIdReq -> Idle
+I(49609) OPENTHREAD:[N] Mle-----------: RLOC16 fffe -> bc50
+I(49609) OPENTHREAD:[N] Mle-----------: Role detached -> child
+I(49609) OPENTHREAD:[I] Mle-----------: PeriodicParentSearch: (Re)starting timer for check interval
+I(49619) OPENTHREAD:[I] Notifier------: StateChanged (0x200012a4) [Role Rloc+ PartitionId NetData Ip6Mult+ PndDset]
+I(49629) OPENTHREAD:[I] Settings------: Re-saved ParentInfo {extaddr:f2c3324b18b99de0, version:4}
+I(49649) OPENTHREAD:[I] Settings------: Saved NetworkInfo {rloc:0xbc50, extaddr:fe43c81ede5af5f1, role:child, mode:0x0f, version:5, keyseq:0x24, ...
+I(49649) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0x3eb, maccntr:0x3e8, mliid:8ce20abed75504ff}
+I(49659) OPENTHREAD:[I] BbrLeader-----: PBBR state: Added
+I(49669) OPENTHREAD:[I] BbrLeader-----: Rloc16:0xbc00, seqno:91, delay:5, timeout:3600
+I(49679) OPENTHREAD:[I] AnnounceSender: Started
+I(49679) OPENTHREAD:[I] Settings------: Read SlaacIidSecretKey
+I(49689) OPENTHREAD:[I] Slaac---------: Adding fd8a:5307:d825:0:157c:d1ac:1f5:5745
+I(49689) OPENTHREAD:[I] SrpClient-----: AutoStartState 1stTimeSelect -> Anycast
+I(49699) OPENTHREAD:[I] SrpClient-----: Requesting max tx jitter 700 (OnDeviceReboot)
+I(49709) OPENTHREAD:[I] SrpClient-----: Auto-starting, server [fd7f:4975:d3c5:0:0:ff:fe00:fc11]:53
+I(49719) OPENTHREAD:[I] SrpClient-----: State Stopped -> Updated
+I (49719) chip[DL]: SRP Client was started, detected server: fd7f:4975:d3c5:0000:0000:00ff:fe00:fc11
+I(49729) OPENTHREAD:[I] RouterTable---: Route table
+I(49739) OPENTHREAD:[I] RouterTable---:     15 0x3c00 - nexthop{47 cost:1}
+I(49739) OPENTHREAD:[I] RouterTable---:     24 0x6000 - nexthop{47 cost:1}
+I(49749) OPENTHREAD:[I] RouterTable---:     47 0xbc00 - parent - leader
+I(49759) OPENTHREAD:[I] Notifier------: StateChanged (0x00000001) [Ip6+]
+I (49759) chip[DL]: Posting ESPSystemEvent: IP Event with eventId : 3
+I (49769) chip[DL]: Posting ESPSystemEvent: IP Event with eventId : 3
+I (49789) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 26 **********
+I (49789) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 28 **********
+I (49809) chip[EM]: <<< [E:26045r S:32432 M:264592419] (S) Msg TX from 0000000000000000 to 1:FFFFFFFB00000000 [2286] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:65)
+I (49819) NimBLE: GATT procedure initiated: indicate; 
+I (49819) NimBLE: att_handle=18
+
+I (49829) chip[DIS]: Advertise operational node 11166AD2C3262286-0000000095AA71CF
+I (49839) chip[DIS]: CHIP minimal mDNS configured as 'Operational device'; instance name: 11166AD2C3262286-0000000095AA71CF.
+E (49849) chip[DIS]: Failed to advertise records: 46
+I (49849) chip[DIS]: mDNS service published: _matter._tcp
+I (49859) chip[SVR]: Operational advertising enabled
+I (49869) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (51789) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.1 F | RH 54.4%
+I(52099) OPENTHREAD:[I] MlrManager----: MLR Reregister!
+I(52159) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d17f, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(52159) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(52169) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(52179) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(52189) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d17f, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-96.0
+I(52199) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(52199) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(52209) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(52219) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d17f, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-94.0
+I(52229) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(52239) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(52239) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (52359) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(52779) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:21d0, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-101.0
+I(52789) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(52789) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(52799) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(52809) OPENTHREAD:[I] Mle-----------: Delay Link Request (fe80:0:0:0:1c16:a8f4:849e:ebaf)
+I(52819) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:21d0, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-101.0
+I(52829) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(52839) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(52849) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I (54859) NimBLE: GATT procedure initiated: indicate; 
+I (54859) NimBLE: att_handle=18
+
+I (54909) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(55409) OPENTHREAD:[I] Mle-----------: Send Link Request (fe80:0:0:0:1c16:a8f4:849e:ebaf)
+I(55429) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:76, seqnum:183, type:Data, src:fe43c81ede5af5f1, dst:1e16a8f4849eebaf, sec:no, ack
+I(55469) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:92, chksum:fbb1, ecn:no, to:1e16a8f4849eebaf, sec:no, prio:net
+I(55469) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(55479) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(55489) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:103, chksum:fd6e, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-101.0
+I(55499) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(55509) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(55519) OPENTHREAD:[I] Mle-----------: Receive Link Accept (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(55529) OPENTHREAD:[I] RouterTable---: Route table
+I(55529) OPENTHREAD:[I] RouterTable---:     15 0x3c00 - nbr{lq[i/o]:2/0 cost:16} - nexthop{47 cost:1}
+I(55539) OPENTHREAD:[I] RouterTable---:     24 0x6000 - nexthop{47 cost:1}
+I(55539) OPENTHREAD:[I] RouterTable---:     47 0xbc00 - parent - leader
+I (56819) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.1 F | RH 54.5%
+I (57399) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (59899) NimBLE: GATT procedure initiated: indicate; 
+I (59899) NimBLE: att_handle=18
+
+I (59949) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (61019) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1788 **********
+I (61019) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1782 **********
+I (61029) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5425 **********
+I (61039) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5451 **********
+I (61859) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.1 F | RH 54.5%
+I (62439) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(63859) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d35f, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-93.0
+I(63859) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(63869) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(63879) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(63889) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d35f, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-96.0
+I(63899) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(63909) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(63909) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (64939) NimBLE: GATT procedure initiated: indicate; 
+I (64939) NimBLE: att_handle=18
+
+I (64989) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (66869) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.1 F | RH 54.5%
+I (67479) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (69979) NimBLE: GATT procedure initiated: indicate; 
+I (69979) NimBLE: att_handle=18
+
+I (70029) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (71889) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.0 F | RH 54.4%
+I (72519) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(73879) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:fe86, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-97.0
+I(73879) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(73889) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(73899) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(73909) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:fe86, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(73919) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(73929) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(73929) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(73939) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:fe86, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-96.0
+I(73949) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(73959) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(73969) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (75019) NimBLE: GATT procedure initiated: indicate; 
+I (75019) NimBLE: att_handle=18
+
+I (75069) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (76119) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1782 **********
+I (76119) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1780 **********
+I (76129) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5451 **********
+I (76139) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5440 **********
+I (76959) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.0 F | RH 54.4%
+I (77559) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(77779) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:c062, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-97.0
+I(77779) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(77789) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(77799) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(77809) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:c062, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-102.0
+I(77819) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(77819) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(77829) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (80059) NimBLE: GATT procedure initiated: indicate; 
+I (80059) NimBLE: att_handle=18
+
+I (80109) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (81969) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.0 F | RH 54.4%
+I (82599) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (85099) NimBLE: GATT procedure initiated: indicate; 
+I (85099) NimBLE: att_handle=18
+
+I (85149) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(86639) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:896d, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-97.0
+I(86639) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(86649) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(86659) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(86669) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:896d, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(86679) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(86689) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(86699) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(86699) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:896d, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-101.0
+I(86709) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(86719) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(86729) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (86989) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.0 F | RH 54.4%
+I (87639) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (90139) NimBLE: GATT procedure initiated: indicate; 
+I (90139) NimBLE: att_handle=18
+
+I (90189) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (91199) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1780 **********
+I (91199) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1775 **********
+I (91209) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5440 **********
+I (91219) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5436 **********
+I (92029) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.0 F | RH 54.3%
+I (92679) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (94869) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (94869) chip[EM]: >>> [E:26046r S:32432 M:212989205] (S) Msg RX from 1:FFFFFFFB00000000 [2286] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:65)
+I (94879) chip[FS]: GeneralCommissioning: Received ArmFailSafe (120s)
+I (94889) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 28 **********
+I (94899) esp_matter_attribute: ********** W : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 30 **********
+I (94909) chip[EM]: <<< [E:26046r S:32432 M:264592420] (S) Msg TX from 0000000000000000 to 1:FFFFFFFB00000000 [2286] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (94919) NimBLE: GATT procedure initiated: indicate; 
+I (94929) NimBLE: att_handle=18
+
+I (94989) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (97039) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 64.0 F | RH 54.3%
+I (97479) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(99799) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:dd8c, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-106.0
+I(99799) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(99809) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(99819) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(99829) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:dd8c, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-103.0
+I(99839) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(99849) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(99859) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(99869) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:dd8c, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-107.0
+I(99869) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(99879) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(99889) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (99979) NimBLE: GATT procedure initiated: indicate; 
+I (99979) NimBLE: att_handle=18
+
+I (100029) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(100949) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d68b, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-101.0
+I(100949) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(100959) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(100969) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(100979) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d68b, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-99.0
+I(100979) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(100989) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(100999) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(101009) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:92, chksum:d68b, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-99.0
+I(101019) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(101029) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(101029) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (102049) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 63.9 F | RH 54.4%
+I (102519) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (105019) NimBLE: GATT procedure initiated: indicate; 
+I (105019) NimBLE: att_handle=18
+
+I (105069) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(105099) OPENTHREAD:[I] Mle-----------: Attempt to become router, reason:TooFewRouters
+I(105099) OPENTHREAD:[I] Mle-----------: Send Address Solicit (fd7f:4975:d3c5:0:0:ff:fe00:bc00)
+I(105119) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:77, chksum:6b2e, ecn:no, to:0xbc00, sec:yes, prio:net
+I(105119) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc50]:61631
+I(105129) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]:61631
+I(105139) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:73, chksum:805f, ecn:no, from:0xbc00, sec:yes, prio:net, rss:-100.0
+I(105149) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]:61631
+I(105159) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:0:0:ff:fe00:bc50]:61631
+I(105169) OPENTHREAD:[I] Mle-----------: Receive Address Reply (fd7f:4975:d3c5:0:0:ff:fe00:bc00)
+I(105169) OPENTHREAD:[I] Mle-----------: Setting alternate RLOC16 0xbc50
+I(105179) OPENTHREAD:[N] Mle-----------: RLOC16 bc50 -> a400
+I(105179) OPENTHREAD:[N] Mle-----------: Role child -> router
+I(105189) OPENTHREAD:[N] Mle-----------: Partition ID 0x305dc21f
+I(105199) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(105199) OPENTHREAD:[I] Notifier------: StateChanged (0x00000064) [Role Rloc+ Rloc-]
+I(105219) OPENTHREAD:[I] Settings------: Saved NetworkInfo {rloc:0xa400, extaddr:fe43c81ede5af5f1, role:router, mode:0x0f, version:5, keyseq:0x24, ...
+I(105219) OPENTHREAD:[I] Settings------: ... pid:0x305dc21f, mlecntr:0x3ed, maccntr:0x3e9, mliid:8ce20abed75504ff}
+I(105229) OPENTHREAD:[I] AnnounceSender: Started
+I(105239) OPENTHREAD:[I] RouterTable---: Route table
+I(105239) OPENTHREAD:[I] RouterTable---:     15 0x3c00 - nexthop{47 cost:1}
+I(105249) OPENTHREAD:[I] RouterTable---:     24 0x6000 - nexthop{47 cost:1}
+I(105259) OPENTHREAD:[I] RouterTable---:     47 0xbc00 - nbr{lq[i/o]:3/2 cost:2} - leader
+I(105259) OPENTHREAD:[I] RouterTable---:     41 0xa400 - me
+I(105299) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:71cc, ecn:no, to:0xffff, sec:no, prio:net
+I(105299) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(105309) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(105869) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(105899) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:605d, ecn:no, to:0xffff, sec:no, prio:net
+I(105899) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(105909) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(105959) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:24f1, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-99.0
+I(105959) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(105969) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(105979) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(105989) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:24f1, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-102.0
+I(105999) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(106009) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(106009) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(106019) OPENTHREAD:[I] RouterTable---: Route table
+I(106019) OPENTHREAD:[I] RouterTable---:     15 0x3c00 - nexthop{47 cost:1}
+I(106029) OPENTHREAD:[I] RouterTable---:     24 0x6000 - nexthop{47 cost:1}
+I(106039) OPENTHREAD:[I] RouterTable---:     47 0xbc00 - nbr{lq[i/o]:3/1 cost:4} - leader
+I(106039) OPENTHREAD:[I] RouterTable---:     41 0xa400 - me
+I (106259) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1775 **********
+I (106259) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1774 **********
+I (106269) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5436 **********
+I (106279) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5437 **********
+I(106689) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:fae5, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-105.0
+I(106699) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(106699) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(106709) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(106719) OPENTHREAD:[I] Mle-----------: Delay Link Request (fe80:0:0:0:1c16:a8f4:849e:ebaf)
+I(106729) OPENTHREAD:[I] Mle-----------: Failed to process Advertisement: NoRoute
+I(106739) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:fae5, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-105.0
+I(106749) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(106749) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(106759) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(106779) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:fae5, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-103.0
+I(106779) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(106789) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(106799) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I (107099) esp_clock: RTC 08:53 (AM) | Display 08:53 | Temp 63.9 F | RH 54.4%
+I(107479) OPENTHREAD:[I] Mle-----------: Send Link Request (fe80:0:0:0:1c16:a8f4:849e:ebaf)
+I(107489) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:95, chksum:fd11, ecn:no, to:1e16a8f4849eebaf, sec:no, prio:net
+I(107489) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(107499) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(107509) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:126, chksum:bd92, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-104.0
+I(107519) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(107529) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(107539) OPENTHREAD:[I] Mle-----------: Receive Link Accept and Request (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(107549) OPENTHREAD:[I] Mle-----------: Send Link Accept (fe80:0:0:0:1c16:a8f4:849e:ebaf)
+I(107549) OPENTHREAD:[I] RouterTable---: Route table
+I(107559) OPENTHREAD:[I] RouterTable---:     15 0x3c00 - nbr{lq[i/o]:2/1 cost:4} - nexthop{47 cost:1}
+I(107569) OPENTHREAD:[I] RouterTable---:     24 0x6000 - nexthop{47 cost:1}
+I(107569) OPENTHREAD:[I] RouterTable---:     47 0xbc00 - nbr{lq[i/o]:3/1 cost:4} - leader
+I(107579) OPENTHREAD:[I] RouterTable---:     41 0xa400 - me
+I (107559) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(107599) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:91, seqnum:188, type:Data, src:fe43c81ede5af5f1, dst:1e16a8f4849eebaf, sec:no, ack
+I(107629) OPENTHREAD:[I] Mac-----------: Frame tx attempt 2/16 failed, error:NoAck, len:91, seqnum:188, type:Data, src:fe43c81ede5af5f1, dst:1e16a8f4849eebaf, sec:no, ack
+I(107669) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:107, chksum:ee73, ecn:no, to:1e16a8f4849eebaf, sec:no, prio:net
+I(107669) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(107679) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(107719) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:218b, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-97.0
+I(107719) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(107729) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(107739) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(107749) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:218b, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-102.0
+I(107759) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(107759) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(107769) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(108039) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(108049) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:c7e7, ecn:no, to:0xffff, sec:no, prio:net
+I(108049) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(108059) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(108349) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:33c0, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-101.0
+I(108349) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(108359) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(108369) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(108379) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:33c0, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-104.0
+I(108389) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(108399) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(108399) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(108409) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:33c0, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-103.0
+I(108419) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(108429) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(108439) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(108439) OPENTHREAD:[I] RouterTable---: Route table
+I(108449) OPENTHREAD:[I] RouterTable---:     15 0x3c00 - nbr{lq[i/o]:2/1 cost:4} - nexthop{47 cost:1}
+I(108459) OPENTHREAD:[I] RouterTable---:     24 0x6000 - nexthop{47 cost:1}
+I(108459) OPENTHREAD:[I] RouterTable---:     47 0xbc00 - nbr{lq[i/o]:3/1 cost:4} - nexthop{15 cost:1} - leader
+I(108469) OPENTHREAD:[I] RouterTable---:     41 0xa400 - me
+I (110099) NimBLE: GATT procedure initiated: indicate; 
+I (110099) NimBLE: att_handle=18
+
+I (110139) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(110849) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:65a3, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(110859) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(110859) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(110869) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(110879) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:65a3, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(110889) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(110899) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(110909) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(110919) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:65a3, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-101.0
+I(110929) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(110929) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(110939) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(111179) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(111209) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:1f01, ecn:no, to:0xffff, sec:no, prio:net
+I(111209) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(111219) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (112109) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 63.9 F | RH 54.4%
+I (112629) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(113089) OPENTHREAD:[I] Mle-----------: Clearing alternate RLOC16
+I(114739) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:84, chksum:49a7, ecn:no, from:1eec0d033bd64d79, sec:no, prio:net, rss:-75.0
+I(114739) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1cec:d03:3bd6:4d79]:19788
+I(114749) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:2]:19788
+I(114759) OPENTHREAD:[I] Mle-----------: Receive Parent Request (fe80:0:0:0:1cec:d03:3bd6:4d79)
+I(114769) OPENTHREAD:[I] Mle-----------: Delay Parent Response (fe80:0:0:0:1cec:d03:3bd6:4d79)
+I(114979) OPENTHREAD:[I] Mle-----------: Send Parent Response (fe80:0:0:0:1cec:d03:3bd6:4d79)
+I(114989) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:133, chksum:c4c3, ecn:no, to:1eec0d033bd64d79, sec:no, prio:net
+I(114999) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(114999) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:1cec:d03:3bd6:4d79]:19788
+I (115129) NimBLE: GATT procedure initiated: indicate; 
+I (115129) NimBLE: att_handle=18
+
+I (115179) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(115499) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:137, chksum:30dd, ecn:no, from:1eec0d033bd64d79, sec:no, prio:net, rss:-75.0
+I(115499) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1cec:d03:3bd6:4d79]:19788
+I(115509) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(115519) OPENTHREAD:[I] Mle-----------: Receive Child ID Request (fe80:0:0:0:1cec:d03:3bd6:4d79)
+I(115529) OPENTHREAD:[I] Mle-----------: Child 0x0000 IPv6 address[1]=fd7f:4975:d3c5:0:b21c:aef5:e1e1:8227
+I(115529) OPENTHREAD:[I] Mle-----------: Child 0x0000 IPv6 address[2]=fd8a:5307:d825:0:6170:7f18:3e11:590e
+I(115539) OPENTHREAD:[I] Mle-----------: Child 0x0000 has 2 registered IPv6 addresses, 2 addresses stored
+I(115569) OPENTHREAD:[I] Settings------: Added ChildInfo {rloc:0xa401, extaddr:1eec0d033bd64d79, timeout:240, mode:0x04, version:4}
+I(115569) OPENTHREAD:[I] Mle-----------: Send Child ID Response (fe80:0:0:0:1cec:d03:3bd6:4d79,0xa401)
+I(115579) OPENTHREAD:[I] Notifier------: StateChanged (0x00000400) [Child+]
+I(115579) OPENTHREAD:[I] ChildSupervsn-: Starting Child Supervision
+I(115589) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:215, chksum:313b, ecn:no, to:1eec0d033bd64d79, sec:no, prio:net
+I(115599) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:1, rss:-75, ack-fp:1
+I(115629) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:1, rss:-75, ack-fp:1
+I(115659) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:215, chksum:313b, ecn:no, to:1eec0d033bd64d79, sec:yes, prio:net
+I(115659) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(115659) OPENTHREAD:[I] MeshForwarder-:     dst:[fe80:0:0:0:1cec:d03:3bd6:4d79]:19788
+I(115699) OPENTHREAD:[I] MeshForwarder-: Received IPv6 None msg, len:40, chksum:0000, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(115699) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:b21c:aef5:e1e1:8227]
+I(115699) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(115729) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 None msg, len:40, chksum:0000, ecn:no, to:0xbc00, sec:yes, prio:normal
+I(115729) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:b21c:aef5:e1e1:8227]
+I(115739) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(115869) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(116069) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-74, ack-fp:0
+I(116269) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(116479) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(116669) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(116689) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:144, chksum:2911, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(116689) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(116699) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(116719) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:144, chksum:ffac, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(116719) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(116729) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(116749) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:124, seqnum:195, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(116789) OPENTHREAD:[I] Mac-----------: Frame tx attempt 2/16 failed, error:NoAck, len:124, seqnum:195, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(116839) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:144, chksum:2911, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(116839) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(116849) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(116859) OPENTHREAD:[I] MeshForwarder-: Received IPv6 HopOpts msg, len:86, chksum:0000, ecn:no, from:0xbc00, sec:yes, prio:normal, rss:-99.0
+I(116869) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(116879) OPENTHREAD:[I] MeshForwarder-:     dst:[ff03:0:0:0:0:0:0:2]
+I(116889) OPENTHREAD:[I] AddrResolver--: Received AddressQuery from 0xbc00 for target fd8a:5307:d825:0:6170:7f18:3e11:590e
+I(116899) OPENTHREAD:[I] AddrResolver--: Sent AddressNotify for target fd8a:5307:d825:0:6170:7f18:3e11:590e
+I(116909) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-74, ack-fp:0
+I(116919) OPENTHREAD:[I] MeshForwarder-: Received IPv6 HopOpts msg, len:86, chksum:0000, ecn:no, from:0x3c00, sec:yes, prio:normal, rss:-101.0
+I(116929) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(116929) OPENTHREAD:[I] MeshForwarder-:     dst:[ff03:0:0:0:0:0:0:2]
+I(116939) OPENTHREAD:[I] MeshForwarder-: Received IPv6 HopOpts msg, len:86, chksum:0000, ecn:no, from:0xbc00, sec:yes, prio:normal, rss:-97.0
+I(116949) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(116959) OPENTHREAD:[I] MeshForwarder-:     dst:[ff03:0:0:0:0:0:0:2]
+I(116969) OPENTHREAD:[I] MeshForwarder-: Received IPv6 HopOpts msg, len:86, chksum:0000, ecn:no, from:0x3c00, sec:yes, prio:normal, rss:-106.0
+I(116979) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(116979) OPENTHREAD:[I] MeshForwarder-:     dst:[ff03:0:0:0:0:0:0:2]
+I(116999) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:124, seqnum:197, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(117049) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:78, seqnum:198, type:Data, src:0xa400, dst:0xbc00, sec:yes, ackreq:yes
+I(117069) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(117079) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:98, chksum:ea10, ecn:no, to:0xbc00, sec:yes, prio:net
+I(117079) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:a400]:61631
+I(117089) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]:61631
+I(117099) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:54, chksum:0184, ecn:no, from:0xbc00, sec:yes, prio:normal, rss:-97.0
+I(117109) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]:61631
+I(117109) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:0:0:ff:fe00:a400]:61631
+I (117119) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I(117129) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:90, chksum:acd4, ecn:no, from:0xbc00, sec:yes, prio:normal, rss:-97.0
+I(117139) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117149) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117159) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:90, chksum:acd4, ecn:no, to:0xa401, sec:yes, prio:normal
+I(117169) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:83, chksum:a5c4, ecn:no, from:aa2519880d650eec, sec:no, prio:net, rss:-94.0
+I(117179) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:a825:1988:d65:eec]:19788
+I(117189) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(117209) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:144, chksum:ffac, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(117209) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117209) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117229) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:90, chksum:d01f, ecn:no, from:0x3c00, sec:yes, prio:normal, rss:-100.0
+I(117239) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117239) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117259) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 HopOpts msg, len:86, chksum:0000, ecn:no, to:0xffff, sec:yes, prio:normal
+I(117259) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(117269) OPENTHREAD:[I] MeshForwarder-:     dst:[ff03:0:0:0:0:0:0:2]
+I(117279) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:2, rss:-75, ack-fp:1
+I(117319) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:90, chksum:acd4, ecn:no, to:0xa401, sec:yes, prio:normal
+I(117319) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117329) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117339) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:90, chksum:d01f, ecn:no, to:0xa401, sec:yes, prio:normal
+I(117349) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:1, rss:-75, ack-fp:1
+I(117369) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 HopOpts msg, len:86, chksum:0000, ecn:no, to:0xffff, sec:yes, prio:normal
+I(117369) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:0:0:ff:fe00:bc00]
+I(117379) OPENTHREAD:[I] MeshForwarder-:     dst:[ff03:0:0:0:0:0:0:2]
+I(117419) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:90, chksum:d01f, ecn:no, to:0xa401, sec:yes, prio:normal
+I(117419) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117429) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117449) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:82, chksum:366d, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(117449) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117459) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117469) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(117489) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:143, chksum:861f, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.5
+I(117489) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117499) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117509) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:82, chksum:eaa6, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(117519) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117529) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117539) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:143, chksum:3d5e, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(117549) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117549) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117569) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:90, seqnum:204, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(117629) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:366d, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(117629) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117639) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117649) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I (117669) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(117669) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:124, seqnum:205, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(117709) OPENTHREAD:[I] Mac-----------: Frame tx attempt 2/16 failed, error:NoAck, len:124, seqnum:205, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(117759) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:143, chksum:861f, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(117759) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117769) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117789) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:90, chksum:e18b, ecn:no, from:0xbc00, sec:yes, prio:normal, rss:-98.0
+I(117789) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117799) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117809) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:90, chksum:e18b, ecn:no, to:0xa401, sec:yes, prio:normal
+I(117839) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:eaa6, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(117839) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117849) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117859) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:1, rss:-75, ack-fp:1
+I(117889) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:90, chksum:e18b, ecn:no, to:0xa401, sec:yes, prio:normal
+I(117899) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117899) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117919) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:82, chksum:9665, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(117919) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(117929) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(117939) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(117979) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:49, seqnum:210, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(117989) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:90, chksum:1110, ecn:no, from:0x3c00, sec:yes, prio:normal, rss:-103.0
+I(117999) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(117999) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(118009) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:90, chksum:1110, ecn:no, to:0xa401, sec:yes, prio:normal
+I(118029) OPENTHREAD:[I] Mac-----------: Frame tx attempt 2/16 failed, error:NoAck, len:49, seqnum:210, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(118069) OPENTHREAD:[I] Mac-----------: Frame tx attempt 3/16 failed, error:NoAck, len:49, seqnum:210, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(118099) OPENTHREAD:[I] Mac-----------: Frame tx attempt 4/16 failed, error:NoAck, len:49, seqnum:210, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(118109) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:1, rss:-75, ack-fp:1
+I(118139) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:143, chksum:3d5e, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(118139) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(118149) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(118199) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:90, chksum:1110, ecn:no, to:0xa401, sec:yes, prio:normal
+I(118199) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(118209) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(118229) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:82, chksum:e57d, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-75.0
+I(118229) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(118239) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(118249) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:1
+I(118269) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:9665, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(118269) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(118279) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(118319) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:e57d, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(118319) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(118329) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(118379) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(118409) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:ea0a, ecn:no, to:0xffff, sec:no, prio:net
+I(118409) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(118419) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(118429) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(118619) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-74, ack-fp:0
+I(118819) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(119019) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(119219) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(119299) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:d1a0, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-99.0
+I(119309) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(119309) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(119319) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(119339) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:d1a0, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-99.0
+I(119339) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(119349) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(119359) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(119369) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:d1a0, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(119379) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(119379) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(119389) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(119419) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-74, ack-fp:0
+I(119629) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(119659) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:45f7, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-100.0
+I(119659) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(119669) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(119679) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(119689) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:45f7, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-106.0
+I(119699) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(119709) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(119719) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(119719) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:45f7, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-104.0
+I(119729) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(119739) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(119749) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(119829) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(120019) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I (120179) NimBLE: GATT procedure initiated: indicate; 
+I (120179) NimBLE: att_handle=18
+
+I (120219) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(120229) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(120419) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(120629) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(120829) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(121029) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-74, ack-fp:0
+I(121229) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I (121329) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1774 **********
+I (121329) esp_matter_attribute: ********** W : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1776 **********
+I (121339) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5437 **********
+I (121349) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5447 **********
+I(121429) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(121629) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(121829) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-74, ack-fp:0
+I(122029) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I (122159) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.5%
+I(122229) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(122429) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(122629) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I (122709) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(122829) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-75, ack-fp:0
+I(123039) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I (125209) NimBLE: GATT procedure initiated: indicate; 
+I (125209) NimBLE: att_handle=18
+
+I (125259) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (127179) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.5%
+I (127749) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(129169) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:93b9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-101.0
+I(129179) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(129179) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(129189) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(129199) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:93b9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-102.0
+I(129209) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(129219) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(129229) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(129239) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:93b9, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-104.0
+I(129249) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(129249) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(129259) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(130079) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:d54e, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-102.0
+I(130079) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(130089) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(130099) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I (130249) NimBLE: GATT procedure initiated: indicate; 
+I (130249) NimBLE: att_handle=18
+
+I (130299) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(131189) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:83, chksum:e25b, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-101.0
+I(131189) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(131199) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(131209) OPENTHREAD:[I] Mle-----------: Receive Announce (fe80:0:0:0:f0c3:324b:18b9:9de0)
+I(131279) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(131299) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:a20a, ecn:no, to:0xffff, sec:no, prio:net
+I(131299) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(131309) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (132379) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I (132789) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (135289) NimBLE: GATT procedure initiated: indicate; 
+I (135289) NimBLE: att_handle=18
+
+I (135369) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (136379) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1776 **********
+I (136379) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5447 **********
+I (136389) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5440 **********
+I (137409) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I (137859) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(138039) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I(139819) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(139859) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:98f7, ecn:no, to:0xffff, sec:no, prio:net
+I(139859) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I (139869) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(139869) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (139889) chip[EM]: >>> [E:26047r S:32432 M:212989206] (S) Msg RX from 1:FFFFFFFB00000000 [2286] to 0000000000000000 --- Type 0001:08 (IM:InvokeCommandRequest) (B:65)
+I (139899) chip[FS]: GeneralCommissioning: Received ArmFailSafe (120s)
+I (139899) esp_matter_attribute: ********** R : Endpoint 0x0000's Cluster 0x00000030's Attribute 0x00000000 is 30 **********
+I (139919) chip[EM]: <<< [E:26047r S:32432 M:264592421] (S) Msg TX from 0000000000000000 to 1:FFFFFFFB00000000 [2286] [BLE] --- Type 0001:09 (IM:InvokeCommandResponse) (B:66)
+I (139929) NimBLE: GATT procedure initiated: indicate; 
+I (139929) NimBLE: att_handle=18
+
+I (139989) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(142229) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:a271, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(142229) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(142239) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(142239) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(142259) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:a271, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(142259) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(142269) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(142279) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(142289) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:a271, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-100.0
+I(142299) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(142309) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(142309) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (142479) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (142609) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 63.9 F | RH 54.4%
+I(143789) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:df2e, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-100.0
+I(143789) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(143799) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(143809) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(143819) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:df2e, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-104.0
+I(143829) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(143829) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(143839) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (144979) NimBLE: GATT procedure initiated: indicate; 
+I (144979) NimBLE: att_handle=18
+
+I (145029) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (147519) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (147809) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I (150019) NimBLE: GATT procedure initiated: indicate; 
+I (150019) NimBLE: att_handle=18
+
+I (150069) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(150679) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:81eb, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-96.0
+I(150689) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(150689) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(150699) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(150709) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:81eb, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-101.0
+I(150719) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(150729) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(150739) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (151409) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1776 **********
+I (151409) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5440 **********
+I (151419) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5436 **********
+I (152559) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (152839) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I(153039) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I(154289) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(154309) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:6c7e, ecn:no, to:0xffff, sec:no, prio:net
+I(154309) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(154319) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(154339) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:096a, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-101.0
+I(154339) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(154349) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(154359) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:1c16:a8f4:849e:ebaf,0x3c00)
+I(154369) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:096a, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-103.0
+I(154379) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(154389) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(154389) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(154399) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:096a, ecn:no, from:1e16a8f4849eebaf, sec:no, prio:net, rss:-102.0
+I(154409) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:1c16:a8f4:849e:ebaf]:19788
+I(154419) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(154429) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (155059) NimBLE: GATT procedure initiated: indicate; 
+I (155059) NimBLE: att_handle=18
+
+I (155109) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (157599) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (158039) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I (160099) NimBLE: GATT procedure initiated: indicate; 
+I (160099) NimBLE: att_handle=18
+
+I (160179) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (162639) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (163239) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I (165139) NimBLE: GATT procedure initiated: indicate; 
+I (165139) NimBLE: att_handle=18
+
+I (165189) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (166439) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1776 **********
+I (166439) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5436 **********
+I (166449) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5438 **********
+I(166679) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:0154, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-105.0
+I(166679) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(166689) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(166689) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(166709) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:0154, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(166709) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(166719) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(166729) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(167449) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(167459) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:d4be, ecn:no, to:0xffff, sec:no, prio:net
+I(167459) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(167469) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (167679) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(168029) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I (168269) esp_clock: RTC 08:54 (AM) | Display 08:54 | Temp 64.0 F | RH 54.4%
+I (170179) NimBLE: GATT procedure initiated: indicate; 
+I (170179) NimBLE: att_handle=18
+
+I (170229) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I (172719) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (173269) esp_clock: RTC 08:55 (AM) | Display 08:55 | Temp 64.0 F | RH 54.5%
+I (175219) NimBLE: GATT procedure initiated: indicate; 
+I (175219) NimBLE: att_handle=18
+
+I (175269) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(175709) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:6296, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-95.0
+I(175709) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(175719) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(175729) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(175739) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:6296, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-97.0
+I(175749) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(175749) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(175759) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I(175769) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:6296, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-98.0
+I(175779) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(175789) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(175789) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (177759) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(178149) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(178159) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:ac03, ecn:no, to:0xffff, sec:no, prio:net
+I(178159) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(178169) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (178279) esp_clock: RTC 08:55 (AM) | Display 08:55 | Temp 64.0 F | RH 54.5%
+I(179959) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-77, ack-fp:0
+I(179969) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:148, chksum:7632, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-76.5
+I(179969) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(179979) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(179999) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:148, chksum:1399, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-79.5
+I(179999) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180009) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(180029) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180059) OPENTHREAD:[I] Mac-----------: Frame tx attempt 2/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180119) OPENTHREAD:[I] Mac-----------: Frame tx attempt 3/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180149) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(180169) OPENTHREAD:[I] Mac-----------: Frame tx attempt 4/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180209) OPENTHREAD:[I] Mac-----------: Frame tx attempt 5/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I (180259) NimBLE: GATT procedure initiated: indicate; 
+I (180259) NimBLE: att_handle=18
+
+I(180259) OPENTHREAD:[I] Mac-----------: Frame tx attempt 6/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180289) OPENTHREAD:[I] Mac-----------: Frame tx attempt 7/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I (180309) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(180319) OPENTHREAD:[I] Mac-----------: Frame tx attempt 8/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180349) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-77, ack-fp:0
+I(180359) OPENTHREAD:[I] Mac-----------: Frame tx attempt 9/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180409) OPENTHREAD:[I] Mac-----------: Frame tx attempt 10/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180439) OPENTHREAD:[I] Mac-----------: Frame tx attempt 11/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180479) OPENTHREAD:[I] Mac-----------: Frame tx attempt 12/16 failed, error:NoAck, len:124, seqnum:221, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180549) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I(180559) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:54, seqnum:222, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180589) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:148, chksum:7632, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(180589) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180599) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(180609) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:90, chksum:59b4, ecn:no, from:0x3c00, sec:yes, prio:normal, rss:-104.0
+I(180619) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(180629) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180639) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:90, chksum:59b4, ecn:no, to:0xa401, sec:yes, prio:normal
+I(180659) OPENTHREAD:[I] Mac-----------: Frame tx attempt 1/16 failed, error:NoAck, len:124, seqnum:223, type:Data, src:0xa400, dst:0x3c00, sec:yes, ackreq:yes
+I(180719) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:148, chksum:1399, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(180719) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180729) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(180749) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:90, chksum:8210, ecn:no, from:0xbc00, sec:yes, prio:normal, rss:-96.0
+I(180749) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(180759) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180769) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:2, rss:-78, ack-fp:1
+I(180799) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:90, chksum:59b4, ecn:no, to:0xa401, sec:yes, prio:normal
+I(180799) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(180809) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180819) OPENTHREAD:[I] MeshForwarder-: Prepping indir tx IPv6 UDP msg, len:90, chksum:8210, ecn:no, to:0xa401, sec:yes, prio:normal
+I(180829) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:1, rss:-78, ack-fp:1
+I(180869) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:90, chksum:8210, ecn:no, to:0xa401, sec:yes, prio:normal
+I(180869) OPENTHREAD:[I] MeshForwarder-:     src:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(180879) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180899) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:82, chksum:66e0, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-78.0
+I(180899) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180909) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(180919) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(180929) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:82, chksum:10e6, ecn:no, from:0xa401, sec:yes, prio:normal, rss:-77.0
+I(180939) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180949) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(180979) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:66e0, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(180979) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(180989) OPENTHREAD:[I] MeshForwarder-:     dst:[fd8a:5307:d825:0:1364:a38d:3564:9ae7]:54424
+I(181019) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:82, chksum:10e6, ecn:no, to:0x3c00, sec:yes, prio:normal
+I(181019) OPENTHREAD:[I] MeshForwarder-:     src:[fd8a:5307:d825:0:6170:7f18:3e11:590e]:5540
+I(181029) OPENTHREAD:[I] MeshForwarder-:     dst:[fd7f:4975:d3c5:4f0a:42db:b467:b846:a352]:48900
+I(181099) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(181299) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I (181479) esp_matter_attribute: ********** R : Endpoint 0x0001's Cluster 0x00000402's Attribute 0x00000000 is 1776 **********
+I (181479) esp_matter_attribute: ********** R : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5438 **********
+I (181489) esp_matter_attribute: ********** W : Endpoint 0x0002's Cluster 0x00000405's Attribute 0x00000000 is 5455 **********
+I(181499) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-77, ack-fp:0
+I(181699) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(181899) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(182099) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I(182299) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I(182499) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(182699) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I (182799) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I(182899) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(183099) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(183309) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I (183309) esp_clock: RTC 08:55 (AM) | Display 08:55 | Temp 64.0 F | RH 54.5%
+I(183509) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(183709) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I(183909) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I(184109) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-78, ack-fp:0
+I(184309) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I(184509) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-77, ack-fp:0
+I(184709) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-80, ack-fp:0
+I(184909) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I(185109) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-76, ack-fp:0
+I (185299) NimBLE: GATT procedure initiated: indicate; 
+I (185299) NimBLE: att_handle=18
+
+I(185309) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I (185349) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(185509) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-77, ack-fp:0
+I(185709) OPENTHREAD:[I] DataPollHandlr: Rx data poll, src:0xa401, qed_msgs:0, rss:-79, ack-fp:0
+I(187079) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:a246, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-104.0
+I(187079) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(187089) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I(187099) OPENTHREAD:[I] Mle-----------: Receive Advertisement (fe80:0:0:0:f0c3:324b:18b9:9de0,0xbc00)
+I(187109) OPENTHREAD:[I] MeshForwarder-: Received IPv6 UDP msg, len:93, chksum:a246, ecn:no, from:f2c3324b18b99de0, sec:no, prio:net, rss:-100.0
+I(187119) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:f0c3:324b:18b9:9de0]:19788
+I(187129) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+W(187129) OPENTHREAD:[W] Mle-----------: Failed to process UDP: Duplicated
+I (187839) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (188329) esp_clock: RTC 08:55 (AM) | Display 08:55 | Temp 64.0 F | RH 54.6%
+I (190339) NimBLE: GATT procedure initiated: indicate; 
+I (190339) NimBLE: att_handle=18
+
+I (190389) chip[DL]: Confirm received for CHIPoBLE TX characteristic indication (con 0) status= 14 
+I(191039) OPENTHREAD:[I] Mle-----------: Send Advertisement (ff02:0:0:0:0:0:0:1)
+I(191059) OPENTHREAD:[I] MeshForwarder-: Sent IPv6 UDP msg, len:93, chksum:e394, ecn:no, to:0xffff, sec:no, prio:net
+I(191059) OPENTHREAD:[I] MeshForwarder-:     src:[fe80:0:0:0:fc43:c81e:de5a:f5f1]:19788
+I(191069) OPENTHREAD:[I] MeshForwarder-:     dst:[ff02:0:0:0:0:0:0:1]:19788
+I (192879) CHIP[DL]: Write request received for CHIPoBLE RX characteristic con 0 16
+I (193329) esp_clock: RTC 08:55 (AM) | Display 08:55 | Temp 64.0 F | RH 54.6%
+I (195379) NimBLE: GATT procedure initiated: indicate; 
+I (195379) NimBLE: att_handle=18

@@ -39,6 +39,9 @@
 
 #if __has_include("esp_matter.h")
 #include "esp_matter.h"
+#include <app/util/attribute-table.h>
+#include <app-common/zap-generated/attribute-type.h>
+#include <platform/PlatformManager.h>
 #if __has_include("platform/ESP32/OpenthreadLauncher.h")
 #include "platform/ESP32/OpenthreadLauncher.h"
 #define ESP_CLOCK_HAS_OT_LAUNCHER 1
@@ -364,15 +367,13 @@ static void matter_update() {
   }
   if (matterAirEndpoint) {
     uint8_t aq = iaq_to_air_quality_enum(vIAQ);
-    esp_matter_attr_val_t attr = esp_matter_enum8(aq);
-    static bool airQualityOk = true;
-    if (airQualityOk) {
-      esp_err_t err = esp_matter::attribute::report(matterAirEndpoint, AirQuality::Id,
-                                                   AirQuality::Attributes::AirQuality::Id, &attr);
-      if (err != ESP_OK) {
-        ESP_LOGW(TAG, "AirQuality report failed: %s (disabling updates)", esp_err_to_name(err));
-        airQualityOk = false;
-      }
+    chip::DeviceLayer::PlatformMgr().LockChipStack();
+    auto status = emberAfWriteAttribute(matterAirEndpoint, AirQuality::Id,
+                                        AirQuality::Attributes::AirQuality::Id,
+                                        &aq, ZCL_ENUM8_ATTRIBUTE_TYPE);
+    chip::DeviceLayer::PlatformMgr().UnlockChipStack();
+    if (status != chip::Protocols::InteractionModel::Status::Success) {
+      ESP_LOGW(TAG, "AirQuality write failed: %u", static_cast<unsigned>(status));
     }
   }
 #endif
