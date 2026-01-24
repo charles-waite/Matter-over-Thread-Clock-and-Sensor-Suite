@@ -29,6 +29,7 @@
 - Validate on hardware: confirm mux stability (no flicker/uneven brightness), I2C sensors respond (BME680, VEML7700, DS3231), and TLC/TBD drive paths behave.
 - If mapping or mux timing changes, verify against `resources/ClockDisplayMapping/Master Mapping.csv`.
 - A display wiring test mode exists via `DISPLAY_TEST_MODE` in `main/main.cpp`; when enabled it cycles digits 0–9 and then lights all segments plus indicators.
+- RH% test mode exists via `DISPLAY_RH_TEST_MODE` in `main/main.cpp`; it steps commons to verify the RH cluster wiring.
 - Commissioning currently succeeds; IAQ endpoint is still not reporting correctly (open item).
 
 ## Hardware & Integration Notes
@@ -36,6 +37,20 @@
 - Display chain: TLC5947 (24-channel cathode sink over SPI) + TBD62783APG (4 GPIO common-anode drivers) multiplexing 10x 7-segment displays.
 - Sensors: BME680 (BSEC2), VEML7700 ambient light, DS3231 RTC.
 - Prefer ESP-IDF drivers for I2C/GPIO/PWM; use Arduino APIs only when required by a component.
+- RTC is synced monthly from Matter/system time with SNTP-over-Thread fallback (see `rtc_time_sync_task` in `main/main.cpp`).
+
+## Serial Commands
+- `refresh <us>`: set page period in microseconds.
+- `display`: print current display pin mapping and SPI host.
+- `rtc`: print RTC UTC time.
+- `rtc YYYY-MM-DD HH:MM:SS`: set RTC UTC time.
+- `pwm <1..4095>`: set global PWM brightness and lock ALS updates.
+- `pwm auto`: re-enable ALS brightness control.
+- `loginfo on|off`: toggle `esp_clock` INFO logs at runtime.
+
+## Build Flags & Tunables
+- `DISPLAY_TEST_MODE` and `DISPLAY_RH_TEST_MODE` in `main/main.cpp`.
+- `DISPLAY_PAGE_PERIOD_US`, `TLC_ON`, and `RH_ON` set default frame timing and brightness.
 
 ## Reference Implementation (WALL-Env)
 - Use `/Users/cwaite/Documents/Coding Projects/MiniSensor/ESP32-Matter-Environmental-Sensor` for ESP-IDF + Matter patterns (see `main/MainSensor.cpp`, `components/`, `sdkconfig.defaults`).

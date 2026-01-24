@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <time.h>
 
+#define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
@@ -13,6 +14,7 @@
 #include "driver/i2c_master.h"
 #include "driver/spi_master.h"
 #include "driver/uart.h"
+#include "esp_sntp.h"
 #include "soc/soc_caps.h"
 #if __has_include("driver/usb_serial_jtag.h")
 #include "driver/usb_serial_jtag.h"
@@ -64,10 +66,14 @@ static constexpr uint32_t I2C_HZ = 400000;
 
 // -------------------- Sensors --------------------
 static constexpr uint8_t BME_ADDR = 0x77;
-static constexpr float TEMP_OFFSET_C = 1.0f;
+static constexpr float TEMP_OFFSET_C = 2.7f;
 static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
+static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 1000UL;
+static constexpr uint32_t RTC_SYNC_MATTER_TIMEOUT_MS = 60UL * 1000UL;
+static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
+static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
@@ -81,11 +87,15 @@ static constexpr gpio_num_t TLC_SPI_MOSI = GPIO_NUM_18;  // D10
 static constexpr gpio_num_t TLC_SPI_SCLK = GPIO_NUM_19;  // D8
 static constexpr gpio_num_t TLC_SPI_LATCH = GPIO_NUM_20; // D9
 static constexpr int32_t TLC_SPI_HZ = 1000000;
-static constexpr uint16_t TLC_ON = 4095;
+static constexpr uint16_t TLC_MAX = 4095;
+static constexpr uint16_t TLC_ON = 1600;
+static constexpr uint16_t RH_ON = 4095;
+static constexpr uint8_t RH_CHANNEL = 3;
 static constexpr uint16_t TLC_OFF = 0;
 
-static constexpr uint32_t DISPLAY_PAGE_PERIOD_US = 1000; // 1ms/page -> 250 Hz frame
+static constexpr uint32_t DISPLAY_PAGE_PERIOD_US = 2500; // 2.5ms/page -> 100 Hz frame
 static constexpr bool DISPLAY_TEST_MODE = false;
+static constexpr bool DISPLAY_RH_TEST_MODE = false;
 
 // -------------------- BSEC2 --------------------
 static Bsec2 env;
@@ -96,11 +106,17 @@ static constexpr size_t BSEC_STATE_SIZE = 512;
 volatile float vTempC = NAN;
 volatile float vHum = NAN;
 volatile float vIAQ = NAN;
+volatile float vCO2eq = NAN;
+volatile uint8_t vIAQacc = 0;
+static volatile bool gBrightnessOverride = false;
+static TaskHandle_t gSntpWaiter = nullptr;
+static volatile bool gSntpSynced = false;
 
 static bsec_virtual_sensor_t sensorList[] = {
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY,
   BSEC_OUTPUT_IAQ,
+  BSEC_OUTPUT_CO2_EQUIVALENT,
 };
 
 static uint32_t millis_ms() {
@@ -166,7 +182,11 @@ static void onBsecOutputs(const bme68xData, const bsecOutputs out, Bsec2) {
     switch (o.sensor_id) {
       case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE: vTempC = o.signal; break;
       case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY: vHum = o.signal; break;
-      case BSEC_OUTPUT_IAQ: vIAQ = o.signal; break;
+      case BSEC_OUTPUT_IAQ:
+        vIAQ = o.signal;
+        vIAQacc = o.accuracy;
+        break;
+      case BSEC_OUTPUT_CO2_EQUIVALENT: vCO2eq = o.signal; break;
       default: break;
     }
   }
@@ -267,6 +287,7 @@ static void init_openthread_platform_config() {
 static uint16_t matterTempEndpoint = 0;
 static uint16_t matterHumEndpoint = 0;
 static uint16_t matterAirEndpoint = 0;
+static bool matterCo2Enabled = false;
 
 static esp_err_t matter_attribute_cb(esp_matter::attribute::callback_type_t, uint16_t, uint32_t,
                                      uint32_t, esp_matter_attr_val_t*, void*) {
@@ -329,7 +350,13 @@ static void matter_init() {
 
   air_quality_sensor::config_t aq_cfg;
   endpoint_t* aq_ep = air_quality_sensor::create(node, &aq_cfg, ENDPOINT_FLAG_NONE, nullptr);
-  if (aq_ep) matterAirEndpoint = endpoint::get_id(aq_ep);
+  if (aq_ep) {
+    matterAirEndpoint = endpoint::get_id(aq_ep);
+    carbon_dioxide_concentration_measurement::config_t co2_cfg;
+    co2_cfg.feature_flags = cluster::concentration_measurement::feature::numeric_measurement::get_id();
+    carbon_dioxide_concentration_measurement::create(aq_ep, &co2_cfg, CLUSTER_FLAG_SERVER);
+    matterCo2Enabled = true;
+  }
 
   esp_err_t err = esp_matter::start(matter_event_callback);
   if (err != ESP_OK) {
@@ -366,14 +393,16 @@ static void matter_update() {
                                   RelativeHumidityMeasurement::Attributes::MeasuredValue::Id, &attr);
   }
   if (matterAirEndpoint) {
-    uint8_t aq = iaq_to_air_quality_enum(vIAQ);
-    chip::DeviceLayer::PlatformMgr().LockChipStack();
-    auto status = emberAfWriteAttribute(matterAirEndpoint, AirQuality::Id,
-                                        AirQuality::Attributes::AirQuality::Id,
-                                        &aq, ZCL_ENUM8_ATTRIBUTE_TYPE);
-    chip::DeviceLayer::PlatformMgr().UnlockChipStack();
-    if (status != chip::Protocols::InteractionModel::Status::Success) {
-      ESP_LOGW(TAG, "AirQuality write failed: %u", static_cast<unsigned>(status));
+    if (isfinite(vIAQ) && vIAQacc >= 2) {
+      uint8_t aq = iaq_to_air_quality_enum(vIAQ);
+      esp_matter_attr_val_t attr = esp_matter_enum8(aq);
+      esp_matter::attribute::update(matterAirEndpoint, AirQuality::Id,
+                                    AirQuality::Attributes::AirQuality::Id, &attr);
+    }
+    if (matterCo2Enabled && isfinite(vCO2eq)) {
+      esp_matter_attr_val_t attr = esp_matter_nullable_float(vCO2eq);
+      esp_matter::attribute::update(matterAirEndpoint, CarbonDioxideConcentrationMeasurement::Id,
+                                    CarbonDioxideConcentrationMeasurement::Attributes::MeasuredValue::Id, &attr);
     }
   }
 #endif
@@ -543,7 +572,12 @@ class DisplayDriver {
   }
 
   void setIndicator(IndicatorId id, bool on) {
-    setSegmentMapped(kIndicatorMap[(uint8_t)id], on);
+    const SegmentMap& map = kIndicatorMap[(uint8_t)id];
+    if (id == IndicatorId::HumidityPercent) {
+      back_[map.page][map.channel] = on ? RH_ON : TLC_OFF;
+    } else {
+      setSegmentMapped(map, on);
+    }
   }
 
   void commit() {
@@ -556,6 +590,15 @@ class DisplayDriver {
     clearBuffers(back_);
   }
 
+  void setChannelAllPages(uint8_t channel, bool on) {
+    if (channel >= 24) return;
+    uint16_t value = on ? RH_ON : TLC_OFF;
+    for (uint8_t p = 0; p < 4; p++) back_[p][channel] = value;
+  }
+
+  void setRhTestMode(bool enabled) { rhTestMode_ = enabled; }
+  void setRhTestPage(uint8_t page) { rhTestPage_ = page & 0x03; }
+
   void setPagePeriodUs(uint32_t us) {
     if (us < 200) us = 200;
     if (us > 5000) us = 5000;
@@ -567,7 +610,8 @@ class DisplayDriver {
 
   uint32_t pagePeriodUs() const { return pagePeriodUs_; }
   const char* hostName() const { return hostName_; }
-  void setBrightness(uint16_t level) { brightness_ = level; }
+  void setBrightness(uint16_t level) { brightness_ = level > TLC_MAX ? TLC_MAX : level; }
+  void setScaleRh(bool enabled) { scaleRh_ = enabled; }
 
  private:
   static void taskTrampoline(void* arg) {
@@ -593,10 +637,16 @@ class DisplayDriver {
       }
 
       allAnodesOff();
-      writeTlcPage(front_[page_]);
-      setAnode(page_);
+      if (rhTestMode_) {
+        writeTlcPage(front_[0]);
+        setAnode(rhTestPage_);
+      } else {
+        writeTlcPage(front_[page_]);
+        setAnode(page_);
+        page_ = (page_ + 1) & 0x03;
+      }
 
-      page_ = (page_ + 1) & 0x03;
+      if (rhTestMode_) continue;
     }
   }
 
@@ -633,7 +683,9 @@ class DisplayDriver {
     int bitPos = 0;
     for (int ch = 23; ch >= 0; ch--) {
       uint32_t v = channels[ch] & 0x0FFF;
-      v = (v * brightness_) / TLC_ON;
+      if (ch != RH_CHANNEL || scaleRh_) {
+        v = (v * brightness_) / TLC_MAX;
+      }
       for (int b = 11; b >= 0; b--) {
         if (v & (1u << b)) payload[bitPos / 8] |= (1u << (7 - (bitPos % 8)));
         bitPos++;
@@ -658,10 +710,13 @@ class DisplayDriver {
   TaskHandle_t taskHandle_ = nullptr;
   esp_timer_handle_t timer_ = nullptr;
   uint8_t page_ = 0;
+  volatile bool rhTestMode_ = false;
+  volatile uint8_t rhTestPage_ = 0;
   uint32_t pagePeriodUs_ = 0;
   spi_device_handle_t spi_ = nullptr;
   const char* hostName_ = "";
-  volatile uint16_t brightness_ = TLC_ON;
+  volatile uint16_t brightness_ = TLC_MAX;
+  volatile bool scaleRh_ = true;
 };
 
 static DisplayDriver display;
@@ -813,6 +868,81 @@ static bool rtc_set_time(uint16_t year, uint8_t mon, uint8_t day,
   return true;
 }
 
+static bool rtc_set_time_from_epoch(time_t epoch) {
+  if (!rtcDev) return false;
+  struct tm utc_tm = {};
+  gmtime_r(&epoch, &utc_tm);
+  return rtc_set_time((uint16_t)(utc_tm.tm_year + 1900),
+                      (uint8_t)(utc_tm.tm_mon + 1),
+                      (uint8_t)utc_tm.tm_mday,
+                      (uint8_t)utc_tm.tm_hour,
+                      (uint8_t)utc_tm.tm_min,
+                      (uint8_t)utc_tm.tm_sec);
+}
+
+static bool system_time_valid() {
+  time_t now = time(nullptr);
+  return now >= RTC_VALID_EPOCH;
+}
+
+static bool sync_rtc_from_system_time(const char* source) {
+  time_t now = time(nullptr);
+  if (now < RTC_VALID_EPOCH) return false;
+  bool ok = rtc_set_time_from_epoch(now);
+  ESP_LOGI(TAG, "RTC sync from %s: %s", source, ok ? "OK" : "FAILED");
+  return ok;
+}
+
+static void sntp_time_sync_cb(struct timeval* tv) {
+  (void)tv;
+  gSntpSynced = true;
+  if (gSntpWaiter) xTaskNotifyGive(gSntpWaiter);
+}
+
+static bool try_matter_time_sync() {
+  uint32_t start = millis_ms();
+  while (millis_ms() - start < RTC_SYNC_MATTER_TIMEOUT_MS) {
+    if (system_time_valid()) return sync_rtc_from_system_time("Matter/system");
+    vTaskDelay(pdMS_TO_TICKS(1000));
+  }
+  return false;
+}
+
+static bool try_sntp_time_sync() {
+  gSntpWaiter = xTaskGetCurrentTaskHandle();
+  gSntpSynced = false;
+  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+  esp_sntp_setservername(0, "pool.ntp.org");
+  esp_sntp_set_time_sync_notification_cb(sntp_time_sync_cb);
+  esp_sntp_init();
+
+  uint32_t start = millis_ms();
+  while (!gSntpSynced && millis_ms() - start < RTC_SYNC_SNTP_TIMEOUT_MS) {
+    if (esp_sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
+      gSntpSynced = true;
+      break;
+    }
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
+  }
+
+  esp_sntp_stop();
+  gSntpWaiter = nullptr;
+  if (!gSntpSynced) return false;
+  return sync_rtc_from_system_time("SNTP");
+}
+
+static void rtc_time_sync_task(void*) {
+  vTaskDelay(pdMS_TO_TICKS(60000)); // allow Matter to initialize
+  while (true) {
+    bool ok = try_matter_time_sync();
+    if (!ok) {
+      ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
+      try_sntp_time_sync();
+    }
+    vTaskDelay(pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+  }
+}
+
 static void renderClock(const ClockTime& t) {
   uint8_t h = t.hour % 12;
   if (h == 0) h = 12;
@@ -925,6 +1055,32 @@ static void updateDisplayTestPattern() {
   step = (step + 1) % 11;
 }
 
+static void updateDisplayRhTestPattern() {
+  static uint32_t last = 0;
+  static uint8_t page = 0;
+  static bool onPhase = true;
+  uint32_t now = millis_ms();
+  if (now - last < 500) return;
+  last = now;
+
+  display.clearBackBuffer();
+  display.setChannelAllPages(3, true); // TLC channel 3 only
+  if (onPhase) {
+    display.setRhTestMode(true);
+    display.setRhTestPage(page);
+    display.setBrightness(TLC_MAX);
+    ESP_LOGI(TAG, "RH test: CA%u ON", page);
+    onPhase = false;
+  } else {
+    display.setRhTestMode(false);
+    display.setBrightness(0);
+    ESP_LOGI(TAG, "RH test: OFF");
+    onPhase = true;
+    page = (page + 1) & 0x03;
+  }
+  display.commit();
+}
+
 static void handleDisplaySerialCommands() {
   static char buf[64];
   static size_t idx = 0;
@@ -937,7 +1093,27 @@ static void handleDisplaySerialCommands() {
     if (ch == '\n' || ch == '\r') {
       buf[idx] = '\0';
       if (idx > 0) {
-        if (strncmp(buf, "refresh", 7) == 0) {
+        if (strncmp(buf, "loginfo on", 10) == 0) {
+          esp_log_level_set(TAG, ESP_LOG_INFO);
+          printf("esp_clock log level: INFO\n");
+        } else if (strncmp(buf, "loginfo off", 11) == 0) {
+          esp_log_level_set(TAG, ESP_LOG_ERROR);
+          printf("esp_clock log level: ERROR\n");
+        } else if (strncmp(buf, "pwm auto", 8) == 0) {
+          gBrightnessOverride = false;
+          display.setScaleRh(true);
+          printf("pwm: auto (ALS)\n");
+        } else if (strncmp(buf, "pwm ", 4) == 0) {
+          char* p = buf + 4;
+          while (*p == ' ') p++;
+          uint32_t level = (uint32_t)strtoul(p, nullptr, 10);
+          if (level < 1) level = 1;
+          if (level > TLC_MAX) level = TLC_MAX;
+          display.setBrightness((uint16_t)level);
+          gBrightnessOverride = true;
+          display.setScaleRh(false);
+          ESP_LOGI(TAG, "PWM level = %u", (unsigned)level);
+        } else if (strncmp(buf, "refresh", 7) == 0) {
           char* p = buf + 7;
           while (*p == ' ') p++;
           uint32_t us = (uint32_t)strtoul(p, nullptr, 10);
@@ -1027,11 +1203,11 @@ static uint16_t scale_brightness(uint16_t als) {
   // Tune as needed based on your enclosure and LEDs.
   const uint16_t min = 50;
   const uint16_t max = 2000;
-  if (als <= min) return (uint16_t)(TLC_ON * 0.15f);
-  if (als >= max) return TLC_ON;
+  if (als <= min) return (uint16_t)(TLC_MAX * 0.15f);
+  if (als >= max) return TLC_MAX;
   float t = (float)(als - min) / (float)(max - min);
   float level = 0.15f + t * (1.0f - 0.15f);
-  return (uint16_t)(level * TLC_ON);
+  return (uint16_t)(level * TLC_MAX);
 }
 
 static void sensor_task(void*) {
@@ -1053,11 +1229,14 @@ static void sensor_task(void*) {
     matter_update();
     uint32_t now = millis_ms();
     if (now - lastLuxMs > 500) {
-      uint16_t als = read_veml7700();
-      display.setBrightness(scale_brightness(als));
+      if (!DISPLAY_RH_TEST_MODE && !gBrightnessOverride) {
+        uint16_t als = read_veml7700();
+        display.setBrightness(scale_brightness(als));
+      }
       lastLuxMs = now;
     }
-    if (DISPLAY_TEST_MODE) updateDisplayTestPattern();
+    if (DISPLAY_RH_TEST_MODE) updateDisplayRhTestPattern();
+    else if (DISPLAY_TEST_MODE) updateDisplayTestPattern();
     else updateDisplayFromState();
     saveBsecStateIfReady(millis_ms());
     handleDisplaySerialCommands();
@@ -1123,4 +1302,5 @@ extern "C" void app_main() {
            1000000.0f / (display.pagePeriodUs() * 4.0f));
 
   xTaskCreate(sensor_task, "sensor_task", 8192, nullptr, 5, nullptr);
+  xTaskCreate(rtc_time_sync_task, "rtc_time_sync", 4096, nullptr, 4, nullptr);
 }
