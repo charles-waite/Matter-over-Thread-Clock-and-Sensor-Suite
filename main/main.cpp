@@ -66,7 +66,7 @@ static constexpr uint32_t I2C_HZ = 400000;
 
 // -------------------- Sensors --------------------
 static constexpr uint8_t BME_ADDR = 0x77;
-static constexpr float TEMP_OFFSET_C = 2.7f;
+static constexpr float TEMP_OFFSET_C = 4.1f;
 static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
@@ -352,9 +352,9 @@ static void matter_init() {
   endpoint_t* aq_ep = air_quality_sensor::create(node, &aq_cfg, ENDPOINT_FLAG_NONE, nullptr);
   if (aq_ep) {
     matterAirEndpoint = endpoint::get_id(aq_ep);
-    carbon_dioxide_concentration_measurement::config_t co2_cfg;
+    cluster::carbon_dioxide_concentration_measurement::config_t co2_cfg;
     co2_cfg.feature_flags = cluster::concentration_measurement::feature::numeric_measurement::get_id();
-    carbon_dioxide_concentration_measurement::create(aq_ep, &co2_cfg, CLUSTER_FLAG_SERVER);
+    cluster::carbon_dioxide_concentration_measurement::create(aq_ep, &co2_cfg, CLUSTER_FLAG_SERVER);
     matterCo2Enabled = true;
   }
 
