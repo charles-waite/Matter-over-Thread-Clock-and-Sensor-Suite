@@ -50,8 +50,11 @@
 #include "esp_matter.h"
 #include <app/util/attribute-table.h>
 #include <app-common/zap-generated/attribute-type.h>
+#include <platform/ConfigurationManager.h>
 #include <platform/PlatformManager.h>
 #include <lib/support/logging/CHIPLogging.h>
+#include <setup_payload/OnboardingCodesUtil.h>
+#include <setup_payload/QRCodeSetupPayloadGenerator.h>
 #if __has_include("platform/ESP32/OpenthreadLauncher.h")
 #include "platform/ESP32/OpenthreadLauncher.h"
 #define ESP_CLOCK_HAS_OT_LAUNCHER 1
@@ -96,7 +99,8 @@ static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 static constexpr gpio_num_t BUTTON_PIN = GPIO_NUM_9;
 static constexpr uint32_t BUTTON_DECOMMISSION_MS = 5000;
-static constexpr bool CLEAR_THREAD_DATASET_ON_BOOT = true;
+static constexpr bool CLEAR_THREAD_DATASET_ON_BOOT = false;
+static constexpr bool ENABLE_OT_EVENT_HANDLER = false;
 
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
@@ -454,6 +458,28 @@ static uint16_t matterHumEndpoint = 0;
 static uint16_t matterAirEndpoint = 0;
 static bool matterCo2Enabled = false;
 
+static void printOnboardingCodesIfNeeded() {
+  using chip::DeviceLayer::ConfigurationMgr;
+  if (ConfigurationMgr().IsFullyProvisioned()) return;
+  chip::RendezvousInformationFlags flags(chip::RendezvousInformationFlag::kBLE);
+
+  char qrBuf[chip::QRCodeBasicSetupPayloadGenerator::kMaxQRCodeBase38RepresentationLength + 1];
+  chip::MutableCharSpan qr(qrBuf);
+  if (GetQRCode(qr, flags) == CHIP_NO_ERROR) {
+    printf("Matter QR code: %s\n", qr.data());
+    char urlBuf[128];
+    if (GetQRCodeUrl(urlBuf, sizeof(urlBuf), qr) == CHIP_NO_ERROR) {
+      printf("Matter QR code URL: %s\n", urlBuf);
+    }
+  }
+
+  char manualBuf[chip::kManualSetupLongCodeCharLength + 1];
+  chip::MutableCharSpan manual(manualBuf);
+  if (GetManualPairingCode(manual, flags) == CHIP_NO_ERROR) {
+    printf("Matter manual pairing code: %s\n", manual.data());
+  }
+}
+
 static esp_err_t matter_attribute_cb(esp_matter::attribute::callback_type_t, uint16_t, uint32_t,
                                      uint32_t, esp_matter_attr_val_t*, void*) {
   return ESP_OK;
@@ -473,6 +499,17 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStarted:
       ESP_LOGI(TAG, "Matter commissioning session started");
+      if (ENABLE_OT_EVENT_HANDLER == false) {
+#if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_OPENTHREAD_ENABLED
+        otInstance* instance = esp_openthread_get_instance();
+        if (instance) {
+          otError err = otIp6SetEnabled(instance, true);
+          ESP_LOGI(TAG, "Thread enable on commissioning: ip6 -> %s", otThreadErrorToString(err));
+          err = otThreadSetEnabled(instance, true);
+          ESP_LOGI(TAG, "Thread enable on commissioning: thread -> %s", otThreadErrorToString(err));
+        }
+#endif
+      }
       logThreadState("commissioning-start");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStopped:
@@ -1503,7 +1540,9 @@ extern "C" void app_main() {
 #endif
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_platform_config();
-  ESP_ERROR_CHECK(esp_event_handler_register(OPENTHREAD_EVENT, ESP_EVENT_ANY_ID, &openthread_event_handler, nullptr));
+  if (ENABLE_OT_EVENT_HANDLER) {
+    ESP_ERROR_CHECK(esp_event_handler_register(OPENTHREAD_EVENT, ESP_EVENT_ANY_ID, &openthread_event_handler, nullptr));
+  }
   maybeClearThreadDataset();
   logThreadState("boot");
 #endif
@@ -1526,6 +1565,9 @@ extern "C" void app_main() {
     ESP_LOGW(TAG, "RTC status read failed");
   }
   matter_init();
+#if ESP_CLOCK_HAS_MATTER
+  printOnboardingCodesIfNeeded();
+#endif
 
   display.init();
 
