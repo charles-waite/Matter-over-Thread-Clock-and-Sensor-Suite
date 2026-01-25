@@ -74,6 +74,8 @@ static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 100
 static constexpr uint32_t RTC_SYNC_MATTER_TIMEOUT_MS = 60UL * 1000UL;
 static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
+// Set to false if RTC stores local time instead of UTC.
+static constexpr bool RTC_STORES_UTC = true;
 
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
@@ -761,12 +763,14 @@ static bool read_rtc_utc(RtcDateTime* out) {
   return true;
 }
 
-static time_t rtc_utc_to_epoch(const RtcDateTime& dt) {
+static time_t rtc_time_to_epoch(const RtcDateTime& dt) {
   char tz_buf[64] = {};
   const char* tz_old = getenv("TZ");
   if (tz_old) strncpy(tz_buf, tz_old, sizeof(tz_buf) - 1);
-  setenv("TZ", "UTC0", 1);
-  tzset();
+  if (RTC_STORES_UTC) {
+    setenv("TZ", "UTC0", 1);
+    tzset();
+  }
   struct tm t = {};
   t.tm_year = dt.year - 1900;
   t.tm_mon = dt.mon - 1;
@@ -775,9 +779,11 @@ static time_t rtc_utc_to_epoch(const RtcDateTime& dt) {
   t.tm_min = dt.min;
   t.tm_sec = dt.sec;
   time_t epoch = mktime(&t);
-  if (tz_old) setenv("TZ", tz_buf, 1);
-  else unsetenv("TZ");
-  tzset();
+  if (RTC_STORES_UTC) {
+    if (tz_old) setenv("TZ", tz_buf, 1);
+    else unsetenv("TZ");
+    tzset();
+  }
   return epoch;
 }
 
@@ -789,7 +795,7 @@ static ClockTime readClockTime() {
   if (dt.sec == lastSec) return cached;
   lastSec = dt.sec;
 
-  time_t epoch = rtc_utc_to_epoch(dt);
+  time_t epoch = rtc_time_to_epoch(dt);
   struct tm local_tm = {};
   localtime_r(&epoch, &local_tm);
   cached.hour = (uint8_t)local_tm.tm_hour;
@@ -824,17 +830,18 @@ static bool rtc_set_time_compile() {
   local_tm.tm_min = min;
   local_tm.tm_sec = sec;
   time_t epoch = mktime(&local_tm);
-  struct tm utc_tm = {};
-  gmtime_r(&epoch, &utc_tm);
+  struct tm out_tm = {};
+  if (RTC_STORES_UTC) gmtime_r(&epoch, &out_tm);
+  else localtime_r(&epoch, &out_tm);
 
   uint8_t data[7] = {
-      to_bcd((uint8_t)utc_tm.tm_sec),
-      to_bcd((uint8_t)utc_tm.tm_min),
-      to_bcd((uint8_t)utc_tm.tm_hour),
+      to_bcd((uint8_t)out_tm.tm_sec),
+      to_bcd((uint8_t)out_tm.tm_min),
+      to_bcd((uint8_t)out_tm.tm_hour),
       0x01,
-      to_bcd((uint8_t)utc_tm.tm_mday),
-      to_bcd((uint8_t)(utc_tm.tm_mon + 1)),
-      to_bcd((uint8_t)(utc_tm.tm_year - 100)),
+      to_bcd((uint8_t)out_tm.tm_mday),
+      to_bcd((uint8_t)(out_tm.tm_mon + 1)),
+      to_bcd((uint8_t)(out_tm.tm_year - 100)),
   };
   if (!i2c_write_dev(rtcDev, 0x00, data, sizeof(data))) return false;
 
@@ -870,14 +877,15 @@ static bool rtc_set_time(uint16_t year, uint8_t mon, uint8_t day,
 
 static bool rtc_set_time_from_epoch(time_t epoch) {
   if (!rtcDev) return false;
-  struct tm utc_tm = {};
-  gmtime_r(&epoch, &utc_tm);
-  return rtc_set_time((uint16_t)(utc_tm.tm_year + 1900),
-                      (uint8_t)(utc_tm.tm_mon + 1),
-                      (uint8_t)utc_tm.tm_mday,
-                      (uint8_t)utc_tm.tm_hour,
-                      (uint8_t)utc_tm.tm_min,
-                      (uint8_t)utc_tm.tm_sec);
+  struct tm tm_out = {};
+  if (RTC_STORES_UTC) gmtime_r(&epoch, &tm_out);
+  else localtime_r(&epoch, &tm_out);
+  return rtc_set_time((uint16_t)(tm_out.tm_year + 1900),
+                      (uint8_t)(tm_out.tm_mon + 1),
+                      (uint8_t)tm_out.tm_mday,
+                      (uint8_t)tm_out.tm_hour,
+                      (uint8_t)tm_out.tm_min,
+                      (uint8_t)tm_out.tm_sec);
 }
 
 static bool system_time_valid() {
