@@ -26,6 +26,7 @@ The following are the current behavior in `main/main.cpp`, described in plain la
 - `DISPLAY_TEST_MODE`, `DISPLAY_RH_TEST_MODE`
 - `DISPLAY_PAGE_PERIOD_US`, `TLC_ON`, `RH_ON`
 - `RTC_SYNC_INTERVAL_MS`, `RTC_SYNC_MATTER_TIMEOUT_MS`, `RTC_SYNC_SNTP_TIMEOUT_MS`
+- `BUTTON_DECOMMISSION_MS`, `BUTTON_PIN`
 
 ## Tunables (Defaults + Ranges)
 These live near the top of `main/main.cpp`.
@@ -60,6 +61,9 @@ These live near the top of `main/main.cpp`.
 
 - `DISPLAY_TEST_MODE` / `DISPLAY_RH_TEST_MODE` (default: false)
   - Build‑time test patterns for wiring/brightness validation.
+
+- `BUTTON_PIN` / `BUTTON_DECOMMISSION_MS` (default: BOOT_PIN / 5000 ms)
+  - Long‑press BOOT (5s) triggers Matter decommission (factory reset).
 
 ## TODO
 - Persist BME680/BSEC2 calibration state to NVM periodically and restore on boot.

@@ -38,6 +38,7 @@
 - Sensors: BME680 (BSEC2), VEML7700 ambient light, DS3231 RTC.
 - Prefer ESP-IDF drivers for I2C/GPIO/PWM; use Arduino APIs only when required by a component.
 - RTC is synced monthly from Matter/system time with SNTP-over-Thread fallback (see `rtc_time_sync_task` in `main/main.cpp`).
+- BOOT long-press (5s) triggers Matter decommission via `esp_matter::factory_reset()`.
 
 ## Serial Commands
 - `refresh <us>`: set page period in microseconds.

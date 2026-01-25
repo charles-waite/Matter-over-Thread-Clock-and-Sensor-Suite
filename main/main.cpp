@@ -4,10 +4,15 @@
 #include <stdio.h>
 #include <time.h>
 
+#ifndef ESP_CLOCK_VERBOSE_LOGS
+#define ESP_CLOCK_VERBOSE_LOGS 1
+#endif
+
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
+#include "esp_event.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -31,6 +36,8 @@
 #include "esp_openthread.h"
 #include <openthread/link.h>
 #include <openthread/thread.h>
+#include <openthread/ip6.h>
+#include <openthread/dataset.h>
 #if __has_include(<openthread/thread_ftd.h>)
 #include <openthread/thread_ftd.h>
 #endif
@@ -44,6 +51,7 @@
 #include <app/util/attribute-table.h>
 #include <app-common/zap-generated/attribute-type.h>
 #include <platform/PlatformManager.h>
+#include <lib/support/logging/CHIPLogging.h>
 #if __has_include("platform/ESP32/OpenthreadLauncher.h")
 #include "platform/ESP32/OpenthreadLauncher.h"
 #define ESP_CLOCK_HAS_OT_LAUNCHER 1
@@ -59,6 +67,18 @@
 // -------------------- Logging --------------------
 static const char* TAG = "esp_clock";
 
+#if ESP_CLOCK_HAS_MATTER
+static void chipLogRedirect(const char * module, uint8_t category, const char * msg, va_list args) {
+  const char * cat = "I";
+  if (category == chip::Logging::kLogCategory_Error) cat = "E";
+  else if (category == chip::Logging::kLogCategory_Detail) cat = "D";
+  else if (category == chip::Logging::kLogCategory_Automation) cat = "A";
+  printf("%s chip[%s]: ", cat, module);
+  vprintf(msg, args);
+  printf("\n");
+}
+#endif
+
 // -------------------- Board + I2C --------------------
 static constexpr gpio_num_t SDA_PIN = GPIO_NUM_22; // D4
 static constexpr gpio_num_t SCL_PIN = GPIO_NUM_23; // D5
@@ -66,7 +86,7 @@ static constexpr uint32_t I2C_HZ = 400000;
 
 // -------------------- Sensors --------------------
 static constexpr uint8_t BME_ADDR = 0x77;
-static constexpr float TEMP_OFFSET_C = 2.7f;
+static constexpr float TEMP_OFFSET_C = 4.0f;
 static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
@@ -74,6 +94,9 @@ static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 100
 static constexpr uint32_t RTC_SYNC_MATTER_TIMEOUT_MS = 60UL * 1000UL;
 static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
+static constexpr gpio_num_t BUTTON_PIN = GPIO_NUM_9;
+static constexpr uint32_t BUTTON_DECOMMISSION_MS = 5000;
+static constexpr bool CLEAR_THREAD_DATASET_ON_BOOT = true;
 
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
@@ -109,6 +132,9 @@ volatile float vIAQ = NAN;
 volatile float vCO2eq = NAN;
 volatile uint8_t vIAQacc = 0;
 static volatile bool gBrightnessOverride = false;
+#if ESP_CLOCK_HAS_MATTER
+static volatile bool gChipLogRedirectEnabled = ESP_CLOCK_VERBOSE_LOGS;
+#endif
 static TaskHandle_t gSntpWaiter = nullptr;
 static volatile bool gSntpSynced = false;
 
@@ -238,6 +264,145 @@ static void configureThreadRouterEligibility() {
 }
 
 #if ESP_CLOCK_HAS_OT_LAUNCHER
+static const char* threadRoleStr(otDeviceRole role) {
+  switch (role) {
+    case OT_DEVICE_ROLE_DISABLED: return "disabled";
+    case OT_DEVICE_ROLE_DETACHED: return "detached";
+    case OT_DEVICE_ROLE_CHILD: return "child";
+    case OT_DEVICE_ROLE_ROUTER: return "router";
+    case OT_DEVICE_ROLE_LEADER: return "leader";
+    default: return "unknown";
+  }
+}
+
+static void logThreadState(const char* label);
+
+static void logDatasetInfo(const otOperationalDataset * dataset, const char * label) {
+  if (!dataset) return;
+  char name[OT_NETWORK_NAME_MAX_SIZE + 1] = {0};
+  char prefix[OT_IP6_ADDRESS_STRING_SIZE] = {0};
+  if (dataset->mComponents.mIsNetworkNamePresent) {
+    size_t len = strnlen(dataset->mNetworkName.m8, OT_NETWORK_NAME_MAX_SIZE);
+    memcpy(name, dataset->mNetworkName.m8, len);
+    name[len] = '\0';
+  }
+  if (dataset->mComponents.mIsMeshLocalPrefixPresent) {
+    otIp6AddressToString(reinterpret_cast<const otIp6Address *>(&dataset->mMeshLocalPrefix), prefix, sizeof(prefix));
+  }
+  ESP_LOGI(TAG, "Thread dataset (%s): name=%s channel=%u panid=0x%04x",
+           label,
+           dataset->mComponents.mIsNetworkNamePresent ? name : "(unset)",
+           dataset->mComponents.mIsChannelPresent ? dataset->mChannel : 0,
+           dataset->mComponents.mIsPanIdPresent ? dataset->mPanId : 0);
+  if (dataset->mComponents.mIsExtendedPanIdPresent) {
+    const uint8_t * ext = dataset->mExtendedPanId.m8;
+    ESP_LOGI(TAG, "Thread dataset (%s): extpanid=%02x%02x%02x%02x%02x%02x%02x%02x",
+             label, ext[0], ext[1], ext[2], ext[3], ext[4], ext[5], ext[6], ext[7]);
+  }
+  if (dataset->mComponents.mIsMeshLocalPrefixPresent) {
+    ESP_LOGI(TAG, "Thread dataset (%s): mesh-local=%s", label, prefix);
+  }
+}
+
+static void openthread_event_handler(void * arg, esp_event_base_t base, int32_t id, void * data) {
+  (void)arg;
+  (void)base;
+  switch (id) {
+    case OPENTHREAD_EVENT_ATTACHED:
+      ESP_LOGI(TAG, "Thread event: attached");
+      logDatasetInfo(reinterpret_cast<otOperationalDataset *>(data), "attached");
+      logThreadState("attached");
+      break;
+    case OPENTHREAD_EVENT_DETACHED:
+      ESP_LOGI(TAG, "Thread event: detached");
+      logThreadState("detached");
+      break;
+    case OPENTHREAD_EVENT_ROLE_CHANGED: {
+      auto * evt = reinterpret_cast<esp_openthread_role_changed_event_t *>(data);
+      if (evt) {
+        ESP_LOGI(TAG, "Thread role change: %s -> %s",
+                 threadRoleStr(evt->previous_role), threadRoleStr(evt->current_role));
+      }
+      logThreadState("role-change");
+      break;
+    }
+    case OPENTHREAD_EVENT_DATASET_CHANGED: {
+      auto * evt = reinterpret_cast<esp_openthread_dataset_changed_event_t *>(data);
+      if (evt) {
+        ESP_LOGI(TAG, "Thread dataset changed: %s",
+                 evt->type == OPENTHREAD_ACTIVE_DATASET ? "active" : "pending");
+        logDatasetInfo(&evt->new_dataset, "dataset-change");
+        if (evt->type == OPENTHREAD_ACTIVE_DATASET) {
+          otInstance* instance = esp_openthread_get_instance();
+          if (instance && otDatasetIsCommissioned(instance)) {
+            otDeviceRole role = otThreadGetDeviceRole(instance);
+            if (role == OT_DEVICE_ROLE_DISABLED || role == OT_DEVICE_ROLE_DETACHED) {
+              otError err = otIp6SetEnabled(instance, true);
+              ESP_LOGI(TAG, "Thread dataset active; ip6 enable -> %s", otThreadErrorToString(err));
+              err = otThreadSetEnabled(instance, true);
+              ESP_LOGI(TAG, "Thread dataset active; thread enable -> %s", otThreadErrorToString(err));
+            }
+          }
+        }
+      }
+      break;
+    }
+    default:
+      break;
+  }
+}
+
+static void logThreadState(const char* label) {
+#if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_OPENTHREAD_ENABLED
+  otInstance* instance = esp_openthread_get_instance();
+  if (!instance) {
+    ESP_LOGW(TAG, "Thread state (%s): no instance", label);
+    return;
+  }
+  otDeviceRole role = otThreadGetDeviceRole(instance);
+  bool commissioned = otDatasetIsCommissioned(instance);
+  uint16_t rloc16 = otThreadGetRloc16(instance);
+  char addr[OT_IP6_ADDRESS_STRING_SIZE];
+
+  const otIp6Address* linkLocal = otThreadGetLinkLocalIp6Address(instance);
+  const otIp6Address* meshLocal = otThreadGetMeshLocalEid(instance);
+  const otIp6Address* rloc = otThreadGetRloc(instance);
+  ESP_LOGI(TAG, "Thread state (%s): role=%s commissioned=%s rloc16=0x%04x",
+           label, threadRoleStr(role), commissioned ? "yes" : "no", rloc16);
+  if (linkLocal) {
+    otIp6AddressToString(linkLocal, addr, sizeof(addr));
+    ESP_LOGI(TAG, "Thread addr (%s): link-local=%s", label, addr);
+  }
+  if (meshLocal) {
+    otIp6AddressToString(meshLocal, addr, sizeof(addr));
+    ESP_LOGI(TAG, "Thread addr (%s): mesh-local=%s", label, addr);
+  }
+  if (rloc) {
+    otIp6AddressToString(rloc, addr, sizeof(addr));
+    ESP_LOGI(TAG, "Thread addr (%s): rloc=%s", label, addr);
+  }
+
+  for (const otNetifAddress* a = otIp6GetUnicastAddresses(instance); a; a = a->mNext) {
+    if (a->mAddress.mFields.m8[0] == 0xfe && (a->mAddress.mFields.m8[1] & 0xc0) == 0x80) {
+      continue; // skip link-local (already logged)
+    }
+    otIp6AddressToString(&a->mAddress, addr, sizeof(addr));
+    ESP_LOGI(TAG, "Thread addr (%s): unicast=%s", label, addr);
+  }
+#endif
+}
+
+static void maybeClearThreadDataset() {
+#if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_OPENTHREAD_ENABLED
+  if (!CLEAR_THREAD_DATASET_ON_BOOT) return;
+  otInstance* instance = esp_openthread_get_instance();
+  if (!instance) return;
+  if (otDatasetIsCommissioned(instance)) return;
+  otError err = otInstanceErasePersistentInfo(instance);
+  ESP_LOGW(TAG, "Thread dataset not commissioned; erased persistent info (%d)", err);
+#endif
+}
+
 static void init_openthread_nvs() {
   esp_err_t err = nvs_flash_init_partition("ot");
   if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -304,9 +469,11 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
   switch (event->Type) {
     case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
       ESP_LOGI(TAG, "Matter commissioning complete");
+      logThreadState("commissioning-complete");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStarted:
       ESP_LOGI(TAG, "Matter commissioning session started");
+      logThreadState("commissioning-start");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStopped:
       ESP_LOGI(TAG, "Matter commissioning session stopped");
@@ -352,9 +519,9 @@ static void matter_init() {
   endpoint_t* aq_ep = air_quality_sensor::create(node, &aq_cfg, ENDPOINT_FLAG_NONE, nullptr);
   if (aq_ep) {
     matterAirEndpoint = endpoint::get_id(aq_ep);
-    carbon_dioxide_concentration_measurement::config_t co2_cfg;
+    cluster::carbon_dioxide_concentration_measurement::config_t co2_cfg;
     co2_cfg.feature_flags = cluster::concentration_measurement::feature::numeric_measurement::get_id();
-    carbon_dioxide_concentration_measurement::create(aq_ep, &co2_cfg, CLUSTER_FLAG_SERVER);
+    cluster::carbon_dioxide_concentration_measurement::create(aq_ep, &co2_cfg, CLUSTER_FLAG_SERVER);
     matterCo2Enabled = true;
   }
 
@@ -943,6 +1110,41 @@ static void rtc_time_sync_task(void*) {
   }
 }
 
+static void button_task(void*) {
+  gpio_reset_pin(BUTTON_PIN);
+  gpio_set_direction(BUTTON_PIN, GPIO_MODE_INPUT);
+  gpio_pullup_en(BUTTON_PIN);
+
+  const TickType_t poll = pdMS_TO_TICKS(50);
+  uint32_t heldMs = 0;
+  bool wasPressed = false;
+  while (true) {
+    bool pressed = gpio_get_level(BUTTON_PIN) == 0;
+    if (pressed) {
+      if (!wasPressed) {
+        heldMs = 0;
+        wasPressed = true;
+      }
+      heldMs += 50;
+      if (heldMs >= BUTTON_DECOMMISSION_MS) {
+        ESP_LOGW(TAG, "BOOT long-press detected; decommissioning");
+#if ESP_CLOCK_HAS_MATTER
+        esp_matter::factory_reset();
+#else
+        esp_restart();
+#endif
+        while (gpio_get_level(BUTTON_PIN) == 0) vTaskDelay(poll);
+        heldMs = 0;
+        wasPressed = false;
+      }
+    } else {
+      heldMs = 0;
+      wasPressed = false;
+    }
+    vTaskDelay(poll);
+  }
+}
+
 static void renderClock(const ClockTime& t) {
   uint8_t h = t.hour % 12;
   if (h == 0) h = 12;
@@ -1099,6 +1301,19 @@ static void handleDisplaySerialCommands() {
         } else if (strncmp(buf, "loginfo off", 11) == 0) {
           esp_log_level_set(TAG, ESP_LOG_ERROR);
           printf("esp_clock log level: ERROR\n");
+#if ESP_CLOCK_HAS_MATTER && ESP_CLOCK_VERBOSE_LOGS
+        } else if (strncmp(buf, "chiplog on", 10) == 0) {
+          gChipLogRedirectEnabled = true;
+          chip::Logging::SetLogRedirectCallback(chipLogRedirect);
+          printf("chip log redirect: ON\n");
+        } else if (strncmp(buf, "chiplog off", 11) == 0) {
+          gChipLogRedirectEnabled = false;
+          chip::Logging::SetLogRedirectCallback(nullptr);
+          printf("chip log redirect: OFF\n");
+#elif ESP_CLOCK_HAS_MATTER
+        } else if (strncmp(buf, "chiplog ", 8) == 0) {
+          printf("chip log redirect unavailable (ESP_CLOCK_VERBOSE_LOGS=0)\n");
+#endif
         } else if (strncmp(buf, "pwm auto", 8) == 0) {
           gBrightnessOverride = false;
           display.setScaleRh(true);
@@ -1228,7 +1443,7 @@ static void sensor_task(void*) {
     }
     matter_update();
     uint32_t now = millis_ms();
-    if (now - lastLuxMs > 500) {
+      if (now - lastLuxMs > 500) {
       if (!DISPLAY_RH_TEST_MODE && !gBrightnessOverride) {
         uint16_t als = read_veml7700();
         display.setBrightness(scale_brightness(als));
@@ -1258,7 +1473,24 @@ static void sensor_task(void*) {
 }
 
 extern "C" void app_main() {
+  printf("esp_clock: printf path OK\n");
+  esp_err_t evt_err = esp_event_loop_create_default();
+  if (evt_err != ESP_OK && evt_err != ESP_ERR_INVALID_STATE) {
+    ESP_LOGW(TAG, "event loop create failed: %s", esp_err_to_name(evt_err));
+  }
   ESP_ERROR_CHECK(nvs_flash_init());
+#if ESP_CLOCK_VERBOSE_LOGS
+  esp_log_level_set("*", ESP_LOG_INFO);
+#else
+  esp_log_level_set("*", ESP_LOG_ERROR);
+#endif
+  esp_log_level_set("esp_clock", ESP_LOG_INFO);
+  ESP_LOGI(TAG, "esp_clock log path OK");
+#if ESP_CLOCK_HAS_MATTER && ESP_CLOCK_VERBOSE_LOGS
+  if (gChipLogRedirectEnabled) {
+    chip::Logging::SetLogRedirectCallback(chipLogRedirect);
+  }
+#endif
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_nvs();
 #endif
@@ -1271,6 +1503,9 @@ extern "C" void app_main() {
 #endif
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_platform_config();
+  ESP_ERROR_CHECK(esp_event_handler_register(OPENTHREAD_EVENT, ESP_EVENT_ANY_ID, &openthread_event_handler, nullptr));
+  maybeClearThreadDataset();
+  logThreadState("boot");
 #endif
 
   init_i2c();
@@ -1303,4 +1538,5 @@ extern "C" void app_main() {
 
   xTaskCreate(sensor_task, "sensor_task", 8192, nullptr, 5, nullptr);
   xTaskCreate(rtc_time_sync_task, "rtc_time_sync", 4096, nullptr, 4, nullptr);
+  xTaskCreate(button_task, "boot_button", 2048, nullptr, 4, nullptr);
 }
