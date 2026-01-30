@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <time.h>
 
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
@@ -76,6 +77,7 @@ static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 // Set to false if RTC stores local time instead of UTC.
 static constexpr bool RTC_STORES_UTC = true;
+static constexpr time_t RTC_MAX_DRIFT_SEC = 5;
 
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
@@ -113,6 +115,7 @@ volatile uint8_t vIAQacc = 0;
 static volatile bool gBrightnessOverride = false;
 static TaskHandle_t gSntpWaiter = nullptr;
 static volatile bool gSntpSynced = false;
+static TaskHandle_t gRtcSyncTask = nullptr;
 
 static bsec_virtual_sensor_t sensorList[] = {
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
@@ -301,17 +304,28 @@ static esp_err_t matter_identify_cb(esp_matter::identification::callback_type_t,
   return ESP_OK;
 }
 
+static void request_rtc_sync(const char* reason);
+
 static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
   if (!event) return;
   switch (event->Type) {
     case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
       ESP_LOGI(TAG, "Matter commissioning complete");
+      request_rtc_sync("commissioning-complete");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStarted:
       ESP_LOGI(TAG, "Matter commissioning session started");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStopped:
       ESP_LOGI(TAG, "Matter commissioning session stopped");
+      break;
+    case chip::DeviceLayer::DeviceEventType::kThreadConnectivityChange:
+      if (event->ThreadConnectivityChange.Result == chip::DeviceLayer::kConnectivity_Established) {
+        request_rtc_sync("thread-connected");
+      }
+      break;
+    case chip::DeviceLayer::DeviceEventType::kOperationalNetworkEnabled:
+      request_rtc_sync("operational-network");
       break;
     default:
       break;
@@ -888,6 +902,14 @@ static bool rtc_set_time_from_epoch(time_t epoch) {
                       (uint8_t)tm_out.tm_sec);
 }
 
+static bool rtc_read_epoch(time_t* out) {
+  if (!out) return false;
+  RtcDateTime dt = {};
+  if (!read_rtc_utc(&dt)) return false;
+  *out = rtc_time_to_epoch(dt);
+  return true;
+}
+
 static bool system_time_valid() {
   time_t now = time(nullptr);
   return now >= RTC_VALID_EPOCH;
@@ -896,9 +918,26 @@ static bool system_time_valid() {
 static bool sync_rtc_from_system_time(const char* source) {
   time_t now = time(nullptr);
   if (now < RTC_VALID_EPOCH) return false;
+  time_t rtc_epoch = 0;
+  if (!rtc_read_epoch(&rtc_epoch)) {
+    bool ok = rtc_set_time_from_epoch(now);
+    ESP_LOGI(TAG, "RTC sync from %s: %s (rtc unreadable)", source, ok ? "OK" : "FAILED");
+    return ok;
+  }
+  int64_t drift = llabs((int64_t)now - (int64_t)rtc_epoch);
+  if (drift <= RTC_MAX_DRIFT_SEC) {
+    ESP_LOGI(TAG, "RTC drift %" PRId64 "s <= %lds; no sync", drift, (long)RTC_MAX_DRIFT_SEC);
+    return true;
+  }
   bool ok = rtc_set_time_from_epoch(now);
-  ESP_LOGI(TAG, "RTC sync from %s: %s", source, ok ? "OK" : "FAILED");
+  ESP_LOGI(TAG, "RTC sync from %s: %s (drift %" PRId64 "s)", source, ok ? "OK" : "FAILED", drift);
   return ok;
+}
+
+static void request_rtc_sync(const char* reason) {
+  if (!gRtcSyncTask) return;
+  ESP_LOGI(TAG, "RTC sync requested (%s)", reason);
+  xTaskNotifyGive(gRtcSyncTask);
 }
 
 static void sntp_time_sync_cb(struct timeval* tv) {
@@ -940,14 +979,15 @@ static bool try_sntp_time_sync() {
 }
 
 static void rtc_time_sync_task(void*) {
-  vTaskDelay(pdMS_TO_TICKS(60000)); // allow Matter to initialize
+  gRtcSyncTask = xTaskGetCurrentTaskHandle();
+  ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(60000)); // allow Matter to initialize or be triggered early
   while (true) {
     bool ok = try_matter_time_sync();
     if (!ok) {
       ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
       try_sntp_time_sync();
     }
-    vTaskDelay(pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
   }
 }
 
