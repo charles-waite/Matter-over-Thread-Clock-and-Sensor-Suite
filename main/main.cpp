@@ -9,6 +9,8 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
+#include "esp_netif.h"
+#include "esp_netif_ip_addr.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -17,6 +19,7 @@
 #include "driver/uart.h"
 #include "esp_sntp.h"
 #include "soc/soc_caps.h"
+#include "lwip/ip6_addr.h"
 #if __has_include("driver/usb_serial_jtag.h")
 #include "driver/usb_serial_jtag.h"
 #define ESP_CLOCK_HAS_USB_SERIAL_JTAG 1
@@ -30,6 +33,9 @@
 
 #if __has_include("esp_openthread.h")
 #include "esp_openthread.h"
+#if __has_include("esp_openthread_netif_glue.h")
+#include "esp_openthread_netif_glue.h"
+#endif
 #include <openthread/link.h>
 #include <openthread/thread.h>
 #if __has_include(<openthread/thread_ftd.h>)
@@ -42,6 +48,7 @@
 
 #if __has_include("esp_matter.h")
 #include "esp_matter.h"
+#include <app/server/Server.h>
 #include <app/util/attribute-table.h>
 #include <app-common/zap-generated/attribute-type.h>
 #include <platform/PlatformManager.h>
@@ -72,12 +79,12 @@ static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
 static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 1000UL;
-static constexpr uint32_t RTC_SYNC_MATTER_TIMEOUT_MS = 60UL * 1000UL;
 static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 // Set to false if RTC stores local time instead of UTC.
 static constexpr bool RTC_STORES_UTC = true;
-static constexpr time_t RTC_MAX_DRIFT_SEC = 5;
+static constexpr time_t RTC_MAX_DRIFT_SEC = 2;
+static constexpr uint32_t RTC_SYNC_GRACE_MS = 60UL * 1000UL;
 
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
@@ -116,6 +123,11 @@ static volatile bool gBrightnessOverride = false;
 static TaskHandle_t gSntpWaiter = nullptr;
 static volatile bool gSntpSynced = false;
 static TaskHandle_t gRtcSyncTask = nullptr;
+static volatile bool gLogInfoPinned = false;
+static volatile bool gThreadAttached = false;
+static volatile bool gCommissioned = false;
+static volatile bool gRtcInitialSyncDone = false;
+static volatile bool gRtcInitialSyncDue = false;
 
 static bsec_virtual_sensor_t sensorList[] = {
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
@@ -305,12 +317,26 @@ static esp_err_t matter_identify_cb(esp_matter::identification::callback_type_t,
 }
 
 static void request_rtc_sync(const char* reason);
+static void ensure_thread_default_netif(const char* reason);
+static bool is_commissioned();
+static bool wait_for_thread_ip6(uint32_t timeout_ms);
+
+static uint8_t co2_to_air_quality_enum(float co2ppm) {
+  if (!isfinite(co2ppm)) return 0;
+  if (co2ppm <= 800.0f) return 1;
+  if (co2ppm <= 1000.0f) return 2;
+  if (co2ppm <= 1500.0f) return 3;
+  if (co2ppm <= 2000.0f) return 4;
+  return 4;
+}
 
 static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
   if (!event) return;
   switch (event->Type) {
     case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
       ESP_LOGI(TAG, "Matter commissioning complete");
+      gCommissioned = true;
+      gRtcInitialSyncDue = true;
       request_rtc_sync("commissioning-complete");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStarted:
@@ -321,26 +347,20 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
       break;
     case chip::DeviceLayer::DeviceEventType::kThreadConnectivityChange:
       if (event->ThreadConnectivityChange.Result == chip::DeviceLayer::kConnectivity_Established) {
-        request_rtc_sync("thread-connected");
+        gThreadAttached = true;
+        ensure_thread_default_netif("thread-connected");
+      } else {
+        gThreadAttached = false;
       }
       break;
     case chip::DeviceLayer::DeviceEventType::kOperationalNetworkEnabled:
-      request_rtc_sync("operational-network");
+      ensure_thread_default_netif("operational-network");
       break;
     default:
       break;
   }
 }
 
-static uint8_t iaq_to_air_quality_enum(float iaq) {
-  if (!isfinite(iaq)) return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kUnknown);
-  if (iaq <= 50.0f) return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kGood);
-  if (iaq <= 100.0f) return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kFair);
-  if (iaq <= 150.0f) return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kModerate);
-  if (iaq <= 200.0f) return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kPoor);
-  if (iaq <= 300.0f) return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kVeryPoor);
-  return static_cast<uint8_t>(chip::app::Clusters::AirQuality::AirQualityEnum::kExtremelyPoor);
-}
 #endif
 
 static void matter_init() {
@@ -364,13 +384,29 @@ static void matter_init() {
   endpoint_t* hum_ep = humidity_sensor::create(node, &hum_cfg, ENDPOINT_FLAG_NONE, nullptr);
   if (hum_ep) matterHumEndpoint = endpoint::get_id(hum_ep);
 
-  air_quality_sensor::config_t aq_cfg;
-  endpoint_t* aq_ep = air_quality_sensor::create(node, &aq_cfg, ENDPOINT_FLAG_NONE, nullptr);
+  endpoint_t* aq_ep = endpoint::create(node, ENDPOINT_FLAG_NONE, nullptr);
   if (aq_ep) {
-    matterAirEndpoint = endpoint::get_id(aq_ep);
+    esp_matter::endpoint::add_device_type(aq_ep,
+                                          ESP_MATTER_AIR_QUALITY_SENSOR_DEVICE_TYPE_ID,
+                                          ESP_MATTER_AIR_QUALITY_SENSOR_DEVICE_TYPE_VERSION);
+    cluster::descriptor::config_t aq_desc_cfg;
+    cluster::identify::config_t aq_id_cfg;
+    cluster::descriptor::create(aq_ep, &aq_desc_cfg, CLUSTER_FLAG_SERVER);
+    cluster::identify::create(aq_ep, &aq_id_cfg, CLUSTER_FLAG_SERVER);
+
+    cluster_t* aq_cluster = cluster::create(aq_ep, AirQuality::Id, CLUSTER_FLAG_SERVER);
+    if (aq_cluster) {
+      cluster::global::attribute::create_feature_map(aq_cluster, 0);
+      cluster::global::attribute::create_cluster_revision(aq_cluster, 1);
+      esp_matter::attribute::create(aq_cluster, AirQuality::Attributes::AirQuality::Id,
+                                    ATTRIBUTE_FLAG_NULLABLE, esp_matter_enum8(0));
+    }
+
     cluster::carbon_dioxide_concentration_measurement::config_t co2_cfg;
     co2_cfg.feature_flags = cluster::concentration_measurement::feature::numeric_measurement::get_id();
     cluster::carbon_dioxide_concentration_measurement::create(aq_ep, &co2_cfg, CLUSTER_FLAG_SERVER);
+
+    matterAirEndpoint = endpoint::get_id(aq_ep);
     matterCo2Enabled = true;
   }
 
@@ -409,16 +445,16 @@ static void matter_update() {
                                   RelativeHumidityMeasurement::Attributes::MeasuredValue::Id, &attr);
   }
   if (matterAirEndpoint) {
-    if (isfinite(vIAQ) && vIAQacc >= 2) {
-      uint8_t aq = iaq_to_air_quality_enum(vIAQ);
-      esp_matter_attr_val_t attr = esp_matter_enum8(aq);
-      esp_matter::attribute::update(matterAirEndpoint, AirQuality::Id,
-                                    AirQuality::Attributes::AirQuality::Id, &attr);
-    }
     if (matterCo2Enabled && isfinite(vCO2eq)) {
       esp_matter_attr_val_t attr = esp_matter_nullable_float(vCO2eq);
       esp_matter::attribute::update(matterAirEndpoint, CarbonDioxideConcentrationMeasurement::Id,
                                     CarbonDioxideConcentrationMeasurement::Attributes::MeasuredValue::Id, &attr);
+    }
+    if (isfinite(vCO2eq)) {
+      uint8_t aq = co2_to_air_quality_enum(vCO2eq);
+      esp_matter_attr_val_t attr = esp_matter_nullable_enum8(nullable<uint8_t>(aq));
+      esp_matter::attribute::update(matterAirEndpoint, AirQuality::Id,
+                                    AirQuality::Attributes::AirQuality::Id, &attr);
     }
   }
 #endif
@@ -741,6 +777,7 @@ static DisplayDriver display;
 typedef struct {
   uint8_t hour;
   uint8_t minute;
+  uint8_t second;
   bool pm;
 } ClockTime;
 
@@ -777,6 +814,8 @@ static bool read_rtc_utc(RtcDateTime* out) {
   return true;
 }
 
+static bool rtc_read_epoch(time_t* out);
+
 static time_t rtc_time_to_epoch(const RtcDateTime& dt) {
   char tz_buf[64] = {};
   const char* tz_old = getenv("TZ");
@@ -803,7 +842,7 @@ static time_t rtc_time_to_epoch(const RtcDateTime& dt) {
 
 static ClockTime readClockTime() {
   static uint8_t lastSec = 0xFF;
-  static ClockTime cached = {12, 0, false};
+  static ClockTime cached = {12, 0, 0, false};
   RtcDateTime dt = {};
   if (!read_rtc_utc(&dt)) return cached;
   if (dt.sec == lastSec) return cached;
@@ -814,6 +853,7 @@ static ClockTime readClockTime() {
   localtime_r(&epoch, &local_tm);
   cached.hour = (uint8_t)local_tm.tm_hour;
   cached.minute = (uint8_t)local_tm.tm_min;
+  cached.second = (uint8_t)local_tm.tm_sec;
   cached.pm = (cached.hour >= 12);
   return cached;
 }
@@ -902,12 +942,32 @@ static bool rtc_set_time_from_epoch(time_t epoch) {
                       (uint8_t)tm_out.tm_sec);
 }
 
+static bool rtc_adjust_seconds(int32_t delta_sec) {
+  time_t rtc_epoch = 0;
+  if (!rtc_read_epoch(&rtc_epoch)) return false;
+  rtc_epoch += (time_t)delta_sec;
+  return rtc_set_time_from_epoch(rtc_epoch);
+}
+
 static bool rtc_read_epoch(time_t* out) {
   if (!out) return false;
   RtcDateTime dt = {};
   if (!read_rtc_utc(&dt)) return false;
   *out = rtc_time_to_epoch(dt);
   return true;
+}
+
+static void log_sync_snapshot(const char* label, time_t net_epoch, time_t rtc_epoch) {
+  struct tm net_tm = {};
+  struct tm rtc_tm = {};
+  localtime_r(&net_epoch, &net_tm);
+  localtime_r(&rtc_epoch, &rtc_tm);
+  ESP_LOGI(TAG,
+           "RTC sync %s | Net %02d:%02d:%02d | RTC %02d:%02d:%02d | Display %02d:%02d:%02d",
+           label,
+           net_tm.tm_hour, net_tm.tm_min, net_tm.tm_sec,
+           rtc_tm.tm_hour, rtc_tm.tm_min, rtc_tm.tm_sec,
+           rtc_tm.tm_hour, rtc_tm.tm_min, rtc_tm.tm_sec);
 }
 
 static bool system_time_valid() {
@@ -920,17 +980,28 @@ static bool sync_rtc_from_system_time(const char* source) {
   if (now < RTC_VALID_EPOCH) return false;
   time_t rtc_epoch = 0;
   if (!rtc_read_epoch(&rtc_epoch)) {
+    log_sync_snapshot("before (rtc unreadable)", now, now);
     bool ok = rtc_set_time_from_epoch(now);
     ESP_LOGI(TAG, "RTC sync from %s: %s (rtc unreadable)", source, ok ? "OK" : "FAILED");
+    if (ok) {
+      time_t rtc_after = 0;
+      if (rtc_read_epoch(&rtc_after)) log_sync_snapshot("after", now, rtc_after);
+    }
     return ok;
   }
+  log_sync_snapshot("before", now, rtc_epoch);
   int64_t drift = llabs((int64_t)now - (int64_t)rtc_epoch);
   if (drift <= RTC_MAX_DRIFT_SEC) {
     ESP_LOGI(TAG, "RTC drift %" PRId64 "s <= %lds; no sync", drift, (long)RTC_MAX_DRIFT_SEC);
+    log_sync_snapshot("after (no sync)", now, rtc_epoch);
     return true;
   }
   bool ok = rtc_set_time_from_epoch(now);
   ESP_LOGI(TAG, "RTC sync from %s: %s (drift %" PRId64 "s)", source, ok ? "OK" : "FAILED", drift);
+  if (ok) {
+    time_t rtc_after = 0;
+    if (rtc_read_epoch(&rtc_after)) log_sync_snapshot("after", now, rtc_after);
+  }
   return ok;
 }
 
@@ -938,6 +1009,37 @@ static void request_rtc_sync(const char* reason) {
   if (!gRtcSyncTask) return;
   ESP_LOGI(TAG, "RTC sync requested (%s)", reason);
   xTaskNotifyGive(gRtcSyncTask);
+}
+
+static bool is_commissioned() {
+#if ESP_CLOCK_HAS_MATTER
+  return chip::Server::GetInstance().GetFabricTable().FabricCount() > 0;
+#else
+  return false;
+#endif
+}
+
+static void ensure_thread_default_netif(const char* reason) {
+#if ESP_CLOCK_HAS_OT_LAUNCHER
+  esp_netif_t* thread_netif = esp_openthread_get_netif();
+  if (!thread_netif) {
+    ESP_LOGW(TAG, "Thread netif unavailable (%s)", reason);
+    return;
+  }
+  esp_netif_t* current = esp_netif_get_default_netif();
+  if (current == thread_netif) {
+    ESP_LOGI(TAG, "Thread netif already default (%s)", reason);
+    return;
+  }
+  esp_err_t err = esp_netif_set_default_netif(thread_netif);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Failed to set default netif (%s): %s", reason, esp_err_to_name(err));
+  } else {
+    ESP_LOGI(TAG, "Thread netif set as default (%s)", reason);
+  }
+#else
+  (void)reason;
+#endif
 }
 
 static void sntp_time_sync_cb(struct timeval* tv) {
@@ -948,18 +1050,34 @@ static void sntp_time_sync_cb(struct timeval* tv) {
 
 static bool try_matter_time_sync() {
   uint32_t start = millis_ms();
-  while (millis_ms() - start < RTC_SYNC_MATTER_TIMEOUT_MS) {
+  ESP_LOGI(TAG, "Matter time sync: waiting for system time");
+  while (millis_ms() - start < RTC_SYNC_SNTP_TIMEOUT_MS) {
     if (system_time_valid()) return sync_rtc_from_system_time("Matter/system");
     vTaskDelay(pdMS_TO_TICKS(1000));
   }
+  ESP_LOGW(TAG, "Matter time sync: timed out");
   return false;
 }
 
 static bool try_sntp_time_sync() {
   gSntpWaiter = xTaskGetCurrentTaskHandle();
   gSntpSynced = false;
+  ensure_thread_default_netif("sntp");
+  if (!wait_for_thread_ip6(60000)) {
+    ESP_LOGW(TAG, "SNTP sync: no IPv6 address; skipping");
+    gSntpWaiter = nullptr;
+    return false;
+  }
+  static const char* kSntpServers[] = {
+    "time.cloudflare.com",
+    "time.google.com",
+    "pool.ntp.org",
+  };
+  ESP_LOGI(TAG, "SNTP sync: starting (server=%s)", kSntpServers[0]);
   esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
-  esp_sntp_setservername(0, "pool.ntp.org");
+  for (size_t i = 0; i < sizeof(kSntpServers) / sizeof(kSntpServers[0]); ++i) {
+    esp_sntp_setservername(i, kSntpServers[i]);
+  }
   esp_sntp_set_time_sync_notification_cb(sntp_time_sync_cb);
   esp_sntp_init();
 
@@ -974,18 +1092,77 @@ static bool try_sntp_time_sync() {
 
   esp_sntp_stop();
   gSntpWaiter = nullptr;
-  if (!gSntpSynced) return false;
+  if (!gSntpSynced) {
+    ESP_LOGW(TAG, "SNTP sync: timed out");
+    return false;
+  }
   return sync_rtc_from_system_time("SNTP");
+}
+
+static bool wait_for_thread_ip6(uint32_t timeout_ms) {
+#if ESP_CLOCK_HAS_OT_LAUNCHER
+  esp_netif_t* netif = esp_openthread_get_netif();
+  if (!netif) return false;
+  uint32_t start = millis_ms();
+  esp_ip6_addr_t addr = {};
+  esp_ip6_addr_t ll = {};
+  bool linkLocalLogged = false;
+  while (millis_ms() - start < timeout_ms) {
+    if (esp_netif_get_ip6_global(netif, &addr) == ESP_OK) {
+      if (!ip6_addr_isany(&addr)) return true;
+    }
+    if (esp_netif_get_ip6_linklocal(netif, &ll) == ESP_OK) {
+      if (!ip6_addr_isany(&ll) && !linkLocalLogged) {
+        ESP_LOGI(TAG, "Thread link-local present (no global yet)");
+        linkLocalLogged = true;
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+  }
+  return false;
+#else
+  (void)timeout_ms;
+  return false;
+#endif
 }
 
 static void rtc_time_sync_task(void*) {
   gRtcSyncTask = xTaskGetCurrentTaskHandle();
   ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(60000)); // allow Matter to initialize or be triggered early
   while (true) {
-    bool ok = try_matter_time_sync();
-    if (!ok) {
-      ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
-      try_sntp_time_sync();
+    bool commissioned = gCommissioned || is_commissioned();
+    if (!commissioned) {
+      ESP_LOGI(TAG, "RTC sync skipped (not commissioned)");
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+      continue;
+    }
+    if (!gThreadAttached) {
+      ESP_LOGI(TAG, "RTC sync skipped (thread not attached)");
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+      continue;
+    }
+    if (gRtcInitialSyncDue && !gRtcInitialSyncDone) {
+      ESP_LOGI(TAG, "RTC initial sync: waiting grace period");
+      vTaskDelay(pdMS_TO_TICKS(RTC_SYNC_GRACE_MS));
+      bool ok = try_matter_time_sync();
+      if (!ok) {
+        ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
+        ok = try_sntp_time_sync();
+      }
+      if (ok) {
+        gRtcInitialSyncDone = true;
+        gRtcInitialSyncDue = false;
+      } else {
+        ESP_LOGW(TAG, "RTC initial sync failed");
+        gRtcInitialSyncDone = true; // don't retry until periodic interval
+        gRtcInitialSyncDue = false;
+      }
+    } else {
+      bool ok = try_matter_time_sync();
+      if (!ok) {
+        ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
+        try_sntp_time_sync();
+      }
     }
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
   }
@@ -1143,9 +1320,11 @@ static void handleDisplaySerialCommands() {
       if (idx > 0) {
         if (strncmp(buf, "loginfo on", 10) == 0) {
           esp_log_level_set(TAG, ESP_LOG_INFO);
+          gLogInfoPinned = true;
           printf("esp_clock log level: INFO\n");
         } else if (strncmp(buf, "loginfo off", 11) == 0) {
           esp_log_level_set(TAG, ESP_LOG_ERROR);
+          gLogInfoPinned = true;
           printf("esp_clock log level: ERROR\n");
         } else if (strncmp(buf, "pwm auto", 8) == 0) {
           gBrightnessOverride = false;
@@ -1174,13 +1353,21 @@ static void handleDisplaySerialCommands() {
                    display.hostName(), TLC_SPI_MOSI, TLC_SPI_SCLK, TLC_SPI_LATCH,
                    TBD_PIN_CA1, TBD_PIN_CA2, TBD_PIN_CA3, TBD_PIN_CA4);
         } else if (strncmp(buf, "rtc ", 4) == 0) {
-          int y, mo, d, h, mi, s;
-          if (sscanf(buf + 4, "%d-%d-%d %d:%d:%d", &y, &mo, &d, &h, &mi, &s) == 6) {
-            bool ok = rtc_set_time((uint16_t)y, (uint8_t)mo, (uint8_t)d,
-                                   (uint8_t)h, (uint8_t)mi, (uint8_t)s);
-            ESP_LOGI(TAG, "RTC set %s", ok ? "OK" : "FAILED");
+          char* p = buf + 4;
+          while (*p == ' ') p++;
+          if (*p == '+' || *p == '-') {
+            int32_t delta = (int32_t)strtol(p, nullptr, 10);
+            bool ok = rtc_adjust_seconds(delta);
+            ESP_LOGI(TAG, "RTC adjust %+ld sec %s", (long)delta, ok ? "OK" : "FAILED");
           } else {
-            ESP_LOGW(TAG, "RTC set format (UTC): rtc YYYY-MM-DD HH:MM:SS");
+            int y, mo, d, h, mi, s;
+            if (sscanf(p, "%d-%d-%d %d:%d:%d", &y, &mo, &d, &h, &mi, &s) == 6) {
+              bool ok = rtc_set_time((uint16_t)y, (uint8_t)mo, (uint8_t)d,
+                                     (uint8_t)h, (uint8_t)mi, (uint8_t)s);
+              ESP_LOGI(TAG, "RTC set %s", ok ? "OK" : "FAILED");
+            } else {
+              ESP_LOGW(TAG, "RTC set format (UTC): rtc YYYY-MM-DD HH:MM:SS");
+            }
           }
         } else if (strcmp(buf, "rtc") == 0) {
           RtcDateTime dt = {};
@@ -1293,9 +1480,9 @@ static void sensor_task(void*) {
       ClockTime ct = readClockTime();
       int h12 = ct.hour % 12;
       if (h12 == 0) h12 = 12;
-      ESP_LOGI(TAG, "RTC %02u:%02u (%s) | Display %02d:%02d | Temp %.1f F | RH %.1f%%",
-               ct.hour, ct.minute, ct.pm ? "PM" : "AM",
-               h12, ct.minute,
+      ESP_LOGI(TAG, "RTC %02u:%02u:%02u (%s) | Display %02d:%02d:%02u | Temp %.1f F | RH %.1f%%",
+               ct.hour, ct.minute, ct.second, ct.pm ? "PM" : "AM",
+               h12, ct.minute, ct.second,
                (double)(vTempC * 9.0f / 5.0f + 32.0f),
                (double)vHum);
       lastLogMs = now;
@@ -1307,6 +1494,25 @@ static void sensor_task(void*) {
 
 extern "C" void app_main() {
   ESP_ERROR_CHECK(nvs_flash_init());
+  {
+    esp_err_t err = esp_netif_init();
+    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
+      ESP_LOGW(TAG, "esp_netif_init failed: %s", esp_err_to_name(err));
+    }
+  }
+  esp_log_level_set(TAG, ESP_LOG_INFO);
+  {
+    esp_timer_handle_t log_timer = nullptr;
+    esp_timer_create_args_t targs = {};
+    targs.callback = [](void*) {
+      if (!gLogInfoPinned) {
+        esp_log_level_set(TAG, ESP_LOG_ERROR);
+      }
+    };
+    targs.name = "loginfo_timeout";
+    esp_timer_create(&targs, &log_timer);
+    esp_timer_start_once(log_timer, 180ULL * 1000ULL * 1000ULL);
+  }
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_nvs();
 #endif
@@ -1339,6 +1545,7 @@ extern "C" void app_main() {
     ESP_LOGW(TAG, "RTC status read failed");
   }
   matter_init();
+  gCommissioned = is_commissioned();
 
   display.init();
 
