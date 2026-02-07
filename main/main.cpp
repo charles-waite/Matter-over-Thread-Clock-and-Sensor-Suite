@@ -17,9 +17,8 @@
 #include "driver/i2c_master.h"
 #include "driver/spi_master.h"
 #include "driver/uart.h"
-#include "esp_sntp.h"
 #include "soc/soc_caps.h"
-#include "lwip/ip6_addr.h"
+#include "time_sync_manager.h"
 #if __has_include("driver/usb_serial_jtag.h")
 #include "driver/usb_serial_jtag.h"
 #define ESP_CLOCK_HAS_USB_SERIAL_JTAG 1
@@ -79,7 +78,6 @@ static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
 static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 1000UL;
-static constexpr uint32_t RTC_SYNC_SNTP_TIMEOUT_MS = 30UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 // Set to false if RTC stores local time instead of UTC.
 static constexpr bool RTC_STORES_UTC = true;
@@ -120,8 +118,6 @@ volatile float vIAQ = NAN;
 volatile float vCO2eq = NAN;
 volatile uint8_t vIAQacc = 0;
 static volatile bool gBrightnessOverride = false;
-static TaskHandle_t gSntpWaiter = nullptr;
-static volatile bool gSntpSynced = false;
 static TaskHandle_t gRtcSyncTask = nullptr;
 static volatile bool gLogInfoPinned = false;
 static volatile bool gThreadAttached = false;
@@ -319,7 +315,10 @@ static esp_err_t matter_identify_cb(esp_matter::identification::callback_type_t,
 static void request_rtc_sync(const char* reason);
 static void ensure_thread_default_netif(const char* reason);
 static bool is_commissioned();
-static bool wait_for_thread_ip6(uint32_t timeout_ms);
+static void onTimeSyncReady(int64_t utc) {
+  (void)utc;
+  ESP_LOGI(TAG, "Matter time sync ready");
+}
 
 static uint8_t co2_to_air_quality_enum(float co2ppm) {
   if (!isfinite(co2ppm)) return 0;
@@ -970,13 +969,7 @@ static void log_sync_snapshot(const char* label, time_t net_epoch, time_t rtc_ep
            rtc_tm.tm_hour, rtc_tm.tm_min, rtc_tm.tm_sec);
 }
 
-static bool system_time_valid() {
-  time_t now = time(nullptr);
-  return now >= RTC_VALID_EPOCH;
-}
-
-static bool sync_rtc_from_system_time(const char* source) {
-  time_t now = time(nullptr);
+static bool sync_rtc_from_epoch(time_t now, const char* source) {
   if (now < RTC_VALID_EPOCH) return false;
   time_t rtc_epoch = 0;
   if (!rtc_read_epoch(&rtc_epoch)) {
@@ -1042,90 +1035,6 @@ static void ensure_thread_default_netif(const char* reason) {
 #endif
 }
 
-static void sntp_time_sync_cb(struct timeval* tv) {
-  (void)tv;
-  gSntpSynced = true;
-  if (gSntpWaiter) xTaskNotifyGive(gSntpWaiter);
-}
-
-static bool try_matter_time_sync() {
-  uint32_t start = millis_ms();
-  ESP_LOGI(TAG, "Matter time sync: waiting for system time");
-  while (millis_ms() - start < RTC_SYNC_SNTP_TIMEOUT_MS) {
-    if (system_time_valid()) return sync_rtc_from_system_time("Matter/system");
-    vTaskDelay(pdMS_TO_TICKS(1000));
-  }
-  ESP_LOGW(TAG, "Matter time sync: timed out");
-  return false;
-}
-
-static bool try_sntp_time_sync() {
-  gSntpWaiter = xTaskGetCurrentTaskHandle();
-  gSntpSynced = false;
-  ensure_thread_default_netif("sntp");
-  if (!wait_for_thread_ip6(60000)) {
-    ESP_LOGW(TAG, "SNTP sync: no IPv6 address; skipping");
-    gSntpWaiter = nullptr;
-    return false;
-  }
-  static const char* kSntpServers[] = {
-    "time.cloudflare.com",
-    "time.google.com",
-    "pool.ntp.org",
-  };
-  ESP_LOGI(TAG, "SNTP sync: starting (server=%s)", kSntpServers[0]);
-  esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
-  for (size_t i = 0; i < sizeof(kSntpServers) / sizeof(kSntpServers[0]); ++i) {
-    esp_sntp_setservername(i, kSntpServers[i]);
-  }
-  esp_sntp_set_time_sync_notification_cb(sntp_time_sync_cb);
-  esp_sntp_init();
-
-  uint32_t start = millis_ms();
-  while (!gSntpSynced && millis_ms() - start < RTC_SYNC_SNTP_TIMEOUT_MS) {
-    if (esp_sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) {
-      gSntpSynced = true;
-      break;
-    }
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(1000));
-  }
-
-  esp_sntp_stop();
-  gSntpWaiter = nullptr;
-  if (!gSntpSynced) {
-    ESP_LOGW(TAG, "SNTP sync: timed out");
-    return false;
-  }
-  return sync_rtc_from_system_time("SNTP");
-}
-
-static bool wait_for_thread_ip6(uint32_t timeout_ms) {
-#if ESP_CLOCK_HAS_OT_LAUNCHER
-  esp_netif_t* netif = esp_openthread_get_netif();
-  if (!netif) return false;
-  uint32_t start = millis_ms();
-  esp_ip6_addr_t addr = {};
-  esp_ip6_addr_t ll = {};
-  bool linkLocalLogged = false;
-  while (millis_ms() - start < timeout_ms) {
-    if (esp_netif_get_ip6_global(netif, &addr) == ESP_OK) {
-      if (!ip6_addr_isany(&addr)) return true;
-    }
-    if (esp_netif_get_ip6_linklocal(netif, &ll) == ESP_OK) {
-      if (!ip6_addr_isany(&ll) && !linkLocalLogged) {
-        ESP_LOGI(TAG, "Thread link-local present (no global yet)");
-        linkLocalLogged = true;
-      }
-    }
-    vTaskDelay(pdMS_TO_TICKS(500));
-  }
-  return false;
-#else
-  (void)timeout_ms;
-  return false;
-#endif
-}
-
 static void rtc_time_sync_task(void*) {
   gRtcSyncTask = xTaskGetCurrentTaskHandle();
   ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(60000)); // allow Matter to initialize or be triggered early
@@ -1144,11 +1053,9 @@ static void rtc_time_sync_task(void*) {
     if (gRtcInitialSyncDue && !gRtcInitialSyncDone) {
       ESP_LOGI(TAG, "RTC initial sync: waiting grace period");
       vTaskDelay(pdMS_TO_TICKS(RTC_SYNC_GRACE_MS));
-      bool ok = try_matter_time_sync();
-      if (!ok) {
-        ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
-        ok = try_sntp_time_sync();
-      }
+      int64_t utc = 0;
+      bool ok = time_sync_now_utc(&utc);
+      if (ok) ok = sync_rtc_from_epoch((time_t)utc, "Matter-Time-Sync");
       if (ok) {
         gRtcInitialSyncDone = true;
         gRtcInitialSyncDue = false;
@@ -1158,10 +1065,11 @@ static void rtc_time_sync_task(void*) {
         gRtcInitialSyncDue = false;
       }
     } else {
-      bool ok = try_matter_time_sync();
-      if (!ok) {
-        ESP_LOGW(TAG, "Matter time sync unavailable; falling back to SNTP");
-        try_sntp_time_sync();
+      int64_t utc = 0;
+      if (time_sync_now_utc(&utc)) {
+        sync_rtc_from_epoch((time_t)utc, "Matter-Time-Sync");
+      } else {
+        ESP_LOGW(TAG, "Matter time sync unavailable");
       }
     }
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
@@ -1438,10 +1346,12 @@ static uint16_t scale_brightness(uint16_t als) {
   // Tune as needed based on your enclosure and LEDs.
   const uint16_t min = 50;
   const uint16_t max = 2000;
-  if (als <= min) return (uint16_t)(TLC_MAX * 0.15f);
+  // Minimum brightness at/under the darkest ALS reading.
+  const float min_level = 0.12f;
+  if (als <= min) return (uint16_t)(TLC_MAX * min_level);
   if (als >= max) return TLC_MAX;
   float t = (float)(als - min) / (float)(max - min);
-  float level = 0.15f + t * (1.0f - 0.15f);
+  float level = min_level + t * (1.0f - min_level);
   return (uint16_t)(level * TLC_MAX);
 }
 
@@ -1450,6 +1360,7 @@ static void sensor_task(void*) {
   uint32_t lastLogMs = 0;
   bool threadConfigured = false;
   while (true) {
+    time_sync_poll();
     if (!env.run()) {
       ESP_LOGW(TAG, "BSEC run returned false");
     }
@@ -1544,6 +1455,8 @@ extern "C" void app_main() {
   } else {
     ESP_LOGW(TAG, "RTC status read failed");
   }
+  time_sync_set_ready_callback(onTimeSyncReady);
+  time_sync_init();
   matter_init();
   gCommissioned = is_commissioned();
 
