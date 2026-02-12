@@ -37,13 +37,19 @@
 - Display chain: TLC5947 (24-channel cathode sink over SPI) + TBD62783APG (4 GPIO common-anode drivers) multiplexing 10x 7-segment displays.
 - Sensors: BME680 (BSEC2), VEML7700 ambient light, DS3231 RTC.
 - Prefer ESP-IDF drivers for I2C/GPIO/PWM; use Arduino APIs only when required by a component.
-- RTC is synced monthly from Matter/system time with SNTP-over-Thread fallback (see `rtc_time_sync_task` in `main/main.cpp`).
+- DS3231 RTC is the primary time source.
+- Matter time is correction-only and is allowed to update RTC only when the candidate epoch is valid and drift exceeds threshold.
+- No compile-time fallback time should be written to RTC/system clock.
 
 ## Serial Commands
 - `refresh <us>`: set page period in microseconds.
 - `display`: print current display pin mapping and SPI host.
 - `rtc`: print RTC UTC time.
 - `rtc YYYY-MM-DD HH:MM:SS`: set RTC UTC time.
+- `timesync`: print sync state (`commissioned`, thread, network-time-valid, interval, validity floor).
+- `timesync now`: trigger immediate Matter-vs-RTC drift check/correction.
+- `timesync interval <seconds>`: set runtime periodic drift-check interval for development.
+- `timesync interval default`: restore default monthly interval.
 - `pwm <1..4095>`: set global PWM brightness and lock ALS updates.
 - `pwm auto`: re-enable ALS brightness control.
 - `loginfo on|off`: toggle `esp_clock` INFO logs at runtime.

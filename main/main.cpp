@@ -6,7 +6,12 @@
 #include <time.h>
 // For settimeofday
 #include <sys/time.h>
-
+// -------------------- Time Sync Kill Switch --------------------
+// Set to 1 to completely disable Matter/network time sync.
+// When disabled, the external DS3231 remains the only authority.
+#if !defined(DISABLE_TIME_SYNC)
+#define DISABLE_TIME_SYNC 0
+#endif
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -86,6 +91,7 @@ static constexpr bool RTC_STORES_UTC = true;
 static constexpr time_t RTC_MAX_DRIFT_SEC = 2;
 static constexpr uint32_t RTC_SYNC_GRACE_MS = 60UL * 1000UL;
 
+
 // -------------------- Display HW --------------------
 // TBD62783APG 4-channel common-anode driver pins (active HIGH).
 static constexpr gpio_num_t TBD_PIN_CA1 = GPIO_NUM_0;   // D0
@@ -126,6 +132,7 @@ static volatile bool gThreadAttached = false;
 static volatile bool gCommissioned = false;
 static volatile bool gRtcInitialSyncDone = false;
 static volatile bool gRtcInitialSyncDue = false;
+static volatile uint32_t gRtcSyncIntervalMs = RTC_SYNC_INTERVAL_MS;
 // Indicates whether network time is considered valid. This flag is set when the
 // Matter time sync subsystem reports that a valid UTC time is available via
 // onTimeSyncReady(). Until this becomes true, the RTC sync task will not
@@ -240,17 +247,15 @@ static void saveBsecStateIfReady(uint32_t nowMs) {
   }
 }
 
-// Compute the build (compile) time as a Unix epoch. This is used to compare
-// against the RTC to determine if the RTC is too far in the past. The
-// implementation mirrors rtc_set_time_compile() without performing any I2C
-// writes.
-static time_t compile_time_epoch() {
+static time_t build_time_epoch() {
   const char* date = __DATE__;
   const char* time = __TIME__;
   char mon_str[4] = {};
   int day = 0;
   int year = 0;
-  int hour = 0, min = 0, sec = 0;
+  int hour = 0;
+  int min = 0;
+  int sec = 0;
   sscanf(date, "%3s %d %d", mon_str, &day, &year);
   sscanf(time, "%d:%d:%d", &hour, &min, &sec);
   const char* months = "JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -266,6 +271,12 @@ static time_t compile_time_epoch() {
   return mktime(&tm_local);
 }
 
+static time_t min_valid_epoch() {
+  time_t floor = RTC_VALID_EPOCH;
+  time_t build = build_time_epoch();
+  if (build > floor) floor = build;
+  return floor;
+}
 
 // -------------------- Thread / Matter --------------------
 static void configureThreadRouterEligibility() {
@@ -347,20 +358,21 @@ static esp_err_t matter_identify_cb(esp_matter::identification::callback_type_t,
 }
 
 static void request_rtc_sync(const char* reason);
+static void schedule_initial_rtc_sync(const char* reason);
 static void ensure_thread_default_netif(const char* reason);
 static bool is_commissioned();
 static void onTimeSyncReady(int64_t utc) {
-  (void)utc;
   ESP_LOGI(TAG, "Matter time sync ready");
-  // Only treat the network time as valid if it is later than the build time.
-  time_t compile_epoch = compile_time_epoch();
-  if (utc > (int64_t)compile_epoch) {
-    // Network time appears to be newer than the firmware build time. Use it.
+  time_t floor = min_valid_epoch();
+  if (utc >= (int64_t)floor) {
     gNetTimeValid = true;
-    request_rtc_sync("time-sync-ready");
+    if (gCommissioned || is_commissioned()) {
+      schedule_initial_rtc_sync("time-sync-ready");
+    } else {
+      ESP_LOGI(TAG, "Matter time valid, awaiting commissioning before RTC correction");
+    }
   } else {
-    // The time sync manager is still returning a fallback (build) time. Do not use it.
-    ESP_LOGW(TAG, "Ignoring Matter time sync fallback (epoch %" PRId64 " <= build epoch %lld)", utc, (long long)compile_epoch);
+    ESP_LOGW(TAG, "Ignoring Matter time epoch %" PRId64 " (< validity floor %ld)", utc, (long)floor);
   }
 }
 
@@ -379,8 +391,7 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
     case chip::DeviceLayer::DeviceEventType::kCommissioningComplete:
       ESP_LOGI(TAG, "Matter commissioning complete");
       gCommissioned = true;
-      gRtcInitialSyncDue = true;
-      request_rtc_sync("commissioning-complete");
+      schedule_initial_rtc_sync("commissioning-complete");
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStarted:
       ESP_LOGI(TAG, "Matter commissioning session started");
@@ -392,6 +403,10 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
       if (event->ThreadConnectivityChange.Result == chip::DeviceLayer::kConnectivity_Established) {
         gThreadAttached = true;
         ensure_thread_default_netif("thread-connected");
+        if (gCommissioned || is_commissioned()) {
+          // Reattach/reconnect path: schedule one grace-delayed correction.
+          schedule_initial_rtc_sync("thread-reconnected");
+        }
       } else {
         gThreadAttached = false;
       }
@@ -905,54 +920,12 @@ static uint8_t to_bcd(uint8_t v) {
   return (uint8_t)(((v / 10) << 4) | (v % 10));
 }
 
-static bool rtc_set_time_compile() {
-  if (!rtcDev) return false;
-  const char* date = __DATE__; // "Mmm dd yyyy"
-  const char* time = __TIME__; // "hh:mm:ss"
-  char mon_str[4] = {};
-  int day = 0;
-  int year = 0;
-  int hour = 0, min = 0, sec = 0;
-  sscanf(date, "%3s %d %d", mon_str, &day, &year);
-  sscanf(time, "%d:%d:%d", &hour, &min, &sec);
-  const char* months = "JanFebMarAprMayJunJulAugSepOctNovDec";
-  const char* p = strstr(months, mon_str);
-  int mon = p ? ((int)(p - months) / 3) + 1 : 1;
-
-  struct tm local_tm = {};
-  local_tm.tm_year = year - 1900;
-  local_tm.tm_mon = mon - 1;
-  local_tm.tm_mday = day;
-  local_tm.tm_hour = hour;
-  local_tm.tm_min = min;
-  local_tm.tm_sec = sec;
-  time_t epoch = mktime(&local_tm);
-  struct tm out_tm = {};
-  if (RTC_STORES_UTC) gmtime_r(&epoch, &out_tm);
-  else localtime_r(&epoch, &out_tm);
-
-  uint8_t data[7] = {
-      to_bcd((uint8_t)out_tm.tm_sec),
-      to_bcd((uint8_t)out_tm.tm_min),
-      to_bcd((uint8_t)out_tm.tm_hour),
-      0x01,
-      to_bcd((uint8_t)out_tm.tm_mday),
-      to_bcd((uint8_t)(out_tm.tm_mon + 1)),
-      to_bcd((uint8_t)(out_tm.tm_year - 100)),
-  };
-  if (!i2c_write_dev(rtcDev, 0x00, data, sizeof(data))) return false;
-
-  uint8_t status = 0;
-  if (i2c_read_dev(rtcDev, 0x0F, &status, 1)) {
-    status &= ~0x80; // clear OSF
-    i2c_write_dev(rtcDev, 0x0F, &status, 1);
-  }
-  return true;
-}
-
 static bool rtc_set_time(uint16_t year, uint8_t mon, uint8_t day,
                          uint8_t hour, uint8_t min, uint8_t sec) {
   if (!rtcDev) return false;
+  ESP_LOGW(TAG, "RTC WRITE: explicit %04u-%02u-%02u %02u:%02u:%02u",
+         year, mon, day, hour, min, sec);
+
   if (year < 2000) year = 2000;
   uint8_t data[7] = {
       to_bcd(sec),
@@ -974,6 +947,7 @@ static bool rtc_set_time(uint16_t year, uint8_t mon, uint8_t day,
 
 static bool rtc_set_time_from_epoch(time_t epoch) {
   if (!rtcDev) return false;
+  ESP_LOGW(TAG, "RTC WRITE: from EPOCH %ld", (long)epoch);
   struct tm tm_out = {};
   if (RTC_STORES_UTC) gmtime_r(&epoch, &tm_out);
   else localtime_r(&epoch, &tm_out);
@@ -1000,6 +974,13 @@ static bool rtc_read_epoch(time_t* out) {
   return true;
 }
 
+static void set_system_time_from_epoch(time_t epoch) {
+  struct timeval tv = {};
+  tv.tv_sec = epoch;
+  tv.tv_usec = 0;
+  settimeofday(&tv, nullptr);
+}
+
 // Set the system (software) time from the external RTC. If reading the RTC
 // fails, this function does nothing. The timezone should already be set
 // appropriately via setenv("TZ", ...) before calling this function.
@@ -1008,11 +989,8 @@ static void set_system_time_from_rtc() {
   if (!rtc_read_epoch(&rtc_epoch)) {
     return;
   }
-  struct timeval tv = {};
-  tv.tv_sec = rtc_epoch;
-  tv.tv_usec = 0;
   // Ignore return value; on failure the system time remains unchanged.
-  settimeofday(&tv, nullptr);
+  set_system_time_from_epoch(rtc_epoch);
 }
 
 static void log_sync_snapshot(const char* label, time_t net_epoch, time_t rtc_epoch) {
@@ -1029,10 +1007,11 @@ static void log_sync_snapshot(const char* label, time_t net_epoch, time_t rtc_ep
 }
 
 static bool sync_rtc_from_epoch(time_t now, const char* source) {
-  if (now < RTC_VALID_EPOCH) return false;
+  if (now < min_valid_epoch()) return false;
   time_t rtc_epoch = 0;
   if (!rtc_read_epoch(&rtc_epoch)) {
     log_sync_snapshot("before (rtc unreadable)", now, now);
+    ESP_LOGW(TAG, "RTC WRITE: %s (rtc unreadable) -> epoch %ld", source, (long)now);
     bool ok = rtc_set_time_from_epoch(now);
     ESP_LOGI(TAG, "RTC sync from %s: %s (rtc unreadable)", source, ok ? "OK" : "FAILED");
     if (ok) {
@@ -1048,6 +1027,7 @@ static bool sync_rtc_from_epoch(time_t now, const char* source) {
     log_sync_snapshot("after (no sync)", now, rtc_epoch);
     return true;
   }
+  ESP_LOGW(TAG, "RTC WRITE: %s (drift %" PRId64 "s) -> epoch %ld", source, drift, (long)now);
   bool ok = rtc_set_time_from_epoch(now);
   ESP_LOGI(TAG, "RTC sync from %s: %s (drift %" PRId64 "s)", source, ok ? "OK" : "FAILED", drift);
   if (ok) {
@@ -1061,6 +1041,19 @@ static void request_rtc_sync(const char* reason) {
   if (!gRtcSyncTask) return;
   ESP_LOGI(TAG, "RTC sync requested (%s)", reason);
   xTaskNotifyGive(gRtcSyncTask);
+}
+
+static void request_rtc_drift_check_now(const char* reason) {
+  // Force the sync task into immediate drift-check path (no grace delay).
+  gRtcInitialSyncDue = false;
+  gRtcInitialSyncDone = true;
+  request_rtc_sync(reason);
+}
+
+static void schedule_initial_rtc_sync(const char* reason) {
+  gRtcInitialSyncDue = true;
+  gRtcInitialSyncDone = false;
+  request_rtc_sync(reason);
 }
 
 static bool is_commissioned() {
@@ -1101,30 +1094,26 @@ static void rtc_time_sync_task(void*) {
     bool commissioned = gCommissioned || is_commissioned();
     if (!commissioned) {
       ESP_LOGI(TAG, "RTC sync skipped (not commissioned)");
-      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(gRtcSyncIntervalMs));
       continue;
     }
     if (!gThreadAttached) {
-      ESP_LOGI(TAG, "RTC sync skipped (thread not attached)");
-      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
-      continue;
+      ESP_LOGI(TAG, "Thread not attached; checking for cached Matter time only");
     }
     // If network time is not yet considered valid, attempt to validate it now.
     if (!gNetTimeValid) {
       int64_t utcCheck = 0;
-      // Query the time sync manager for the current UTC time. If the returned
-      // epoch is newer than the build time, mark the network time as valid.
-      if (time_sync_now_utc(&utcCheck) && utcCheck > (int64_t)compile_time_epoch()) {
+      if (time_sync_now_utc(&utcCheck) && utcCheck >= (int64_t)min_valid_epoch()) {
         gNetTimeValid = true;
         ESP_LOGI(TAG, "Matter network time has become valid; enabling RTC sync");
         request_rtc_sync("time-sync-valid");
       }
     }
     // Do not sync the RTC until the network time has been reported as valid.
-    // This prevents overwriting the external RTC with compile-time fallback values.
+    // This prevents overwriting the external RTC with non-authoritative time.
     if (!gNetTimeValid) {
       ESP_LOGI(TAG, "RTC sync skipped (network time not valid)");
-      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+      ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(gRtcSyncIntervalMs));
       continue;
     }
     if (gRtcInitialSyncDue && !gRtcInitialSyncDone) {
@@ -1149,7 +1138,7 @@ static void rtc_time_sync_task(void*) {
         ESP_LOGW(TAG, "Matter time sync unavailable");
       }
     }
-    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(RTC_SYNC_INTERVAL_MS));
+    ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(gRtcSyncIntervalMs));
   }
 }
 
@@ -1362,6 +1351,31 @@ static void handleDisplaySerialCommands() {
           } else {
             ESP_LOGW(TAG, "RTC read failed");
           }
+        } else if (strcmp(buf, "timesync now") == 0) {
+          request_rtc_drift_check_now("serial-timesync-now");
+          ESP_LOGI(TAG, "Time sync: immediate drift check requested");
+        } else if (strncmp(buf, "timesync interval", 17) == 0) {
+          char* p = buf + 17;
+          while (*p == ' ') p++;
+          if (strcmp(p, "default") == 0) {
+            gRtcSyncIntervalMs = RTC_SYNC_INTERVAL_MS;
+            ESP_LOGI(TAG, "Time sync interval reset to default (%lu ms)",
+                     (unsigned long)gRtcSyncIntervalMs);
+          } else {
+            uint32_t sec = (uint32_t)strtoul(p, nullptr, 10);
+            if (sec < 1) sec = 1;
+            gRtcSyncIntervalMs = sec * 1000UL;
+            ESP_LOGI(TAG, "Time sync interval set to %lu s (%lu ms)",
+                     (unsigned long)sec, (unsigned long)gRtcSyncIntervalMs);
+          }
+        } else if (strcmp(buf, "timesync") == 0) {
+          ESP_LOGI(TAG,
+                   "Time sync status: commissioned=%d thread=%d net_valid=%d interval_ms=%lu floor_epoch=%ld",
+                   (int)(gCommissioned || is_commissioned()),
+                   (int)gThreadAttached,
+                   (int)gNetTimeValid,
+                   (unsigned long)gRtcSyncIntervalMs,
+                   (long)min_valid_epoch());
         }
       }
       idx = 0;
@@ -1437,7 +1451,9 @@ static void sensor_task(void*) {
   uint32_t lastLogMs = 0;
   bool threadConfigured = false;
   while (true) {
-    time_sync_poll();
+    #if !DISABLE_TIME_SYNC
+      time_sync_poll();
+    #endif
     if (!env.run()) {
       ESP_LOGW(TAG, "BSEC run returned false");
     }
@@ -1525,41 +1541,39 @@ extern "C" void app_main() {
   if (i2c_read_dev(rtcDev, 0x0F, &status, 1)) {
     // OSF bit indicates the RTC lost power and its time is invalid.
     if (status & 0x80) {
-      ESP_LOGW(TAG, "RTC lost power (OSF=1); initializing from compile time");
-      rtc_set_time_compile();
+      ESP_LOGW(TAG, "RTC lost power (OSF=1); RTC time marked invalid until Matter sync");
     } else {
       ESP_LOGI(TAG, "RTC status OK (OSF=0)");
     }
   } else {
     ESP_LOGW(TAG, "RTC status read failed");
   }
-  // Use the external RTC as the source of truth for system time. If the RTC time
-  // predates the build time, update the RTC from the build time. In any case,
-  // set the system clock from the RTC.
+  // Startup clock-source hierarchy (best to worst):
+  // 1) RTC (if plausible and readable)
+  // 2) Unsynced (no compile-time fallback)
+  // Matter/network time is correction-only and updates RTC after validation.
   {
     time_t rtc_epoch = 0;
+    time_t floor = min_valid_epoch();
+    ESP_LOGI(TAG, "Time validity floor epoch: %ld", (long)floor);
     if (rtc_read_epoch(&rtc_epoch)) {
-      time_t compile_epoch = compile_time_epoch();
-      if (rtc_epoch < compile_epoch) {
-        ESP_LOGW(TAG, "RTC time earlier than build time; updating RTC from compile time");
-        rtc_set_time_compile();
-        // re-read the RTC after updating it
-        if (rtc_read_epoch(&rtc_epoch)) {
-          set_system_time_from_rtc();
-        }
-      } else {
-        // RTC time is valid; set system time from RTC
+      if (rtc_epoch >= floor) {
+        ESP_LOGI(TAG, "Clock source selected: RTC");
         set_system_time_from_rtc();
+      } else {
+        ESP_LOGW(TAG, "RTC epoch %ld is below validity floor %ld; clock remains unsynced",
+                 (long)rtc_epoch, (long)floor);
       }
     } else {
-      // Unable to read RTC; fallback to compile time to initialize RTC and system time.
-      ESP_LOGW(TAG, "RTC read failed; initializing from compile time");
-      rtc_set_time_compile();
-      set_system_time_from_rtc();
+      ESP_LOGW(TAG, "RTC read failed; clock remains unsynced");
     }
   }
-  time_sync_set_ready_callback(onTimeSyncReady);
-  time_sync_init();
+  #if !DISABLE_TIME_SYNC
+    time_sync_set_ready_callback(onTimeSyncReady);
+    time_sync_init();
+  #else
+    ESP_LOGW(TAG, "Time sync disabled (DISABLE_TIME_SYNC=1)");
+  #endif
   matter_init();
   gCommissioned = is_commissioned();
 
@@ -1573,5 +1587,7 @@ extern "C" void app_main() {
            1000000.0f / (display.pagePeriodUs() * 4.0f));
 
   xTaskCreate(sensor_task, "sensor_task", 8192, nullptr, 5, nullptr);
+  #if !DISABLE_TIME_SYNC
   xTaskCreate(rtc_time_sync_task, "rtc_time_sync", 4096, nullptr, 4, nullptr);
+  #endif
 }
