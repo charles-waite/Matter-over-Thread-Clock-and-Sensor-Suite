@@ -16,8 +16,10 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_rom_sys.h"
+#include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_netif_ip_addr.h"
+#include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -90,6 +92,12 @@ static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 static constexpr bool RTC_STORES_UTC = true;
 static constexpr time_t RTC_MAX_DRIFT_SEC = 2;
 static constexpr uint32_t RTC_SYNC_GRACE_MS = 60UL * 1000UL;
+static constexpr char DIAG_NS[] = "diag";
+static constexpr char DIAG_KEY_BOOT_COUNT[] = "boot_count";
+static constexpr char DIAG_KEY_LAST_RESET[] = "last_reset";
+static constexpr char DIAG_KEY_LAST_RESET_EPOCH[] = "last_reset_epoch";
+static constexpr char DIAG_KEY_RESET_HISTORY[] = "reset_hist";
+static constexpr uint32_t DIAG_RESET_HISTORY_MAX = 5;
 
 
 // -------------------- Display HW --------------------
@@ -138,6 +146,154 @@ static volatile uint32_t gRtcSyncIntervalMs = RTC_SYNC_INTERVAL_MS;
 // onTimeSyncReady(). Until this becomes true, the RTC sync task will not
 // overwrite the external RTC.
 static volatile bool gNetTimeValid = false;
+static uint32_t gBootCount = 0;
+static esp_reset_reason_t gPrevResetReason = ESP_RST_UNKNOWN;
+static esp_reset_reason_t gCurrentResetReason = ESP_RST_UNKNOWN;
+static int64_t gPrevResetEpoch = 0;
+static int64_t gCurrentResetEpoch = 0;
+
+static bool rtc_read_epoch(time_t* out);
+
+typedef struct {
+  uint32_t bootCount;
+  uint32_t resetReason;
+  int64_t epoch;
+} ResetEvent;
+
+typedef struct {
+  uint32_t count;
+  uint32_t next;
+  ResetEvent entries[DIAG_RESET_HISTORY_MAX];
+} ResetHistory;
+
+static ResetHistory gResetHistory = {};
+
+static const char* resetReasonToStr(esp_reset_reason_t reason) {
+  switch (reason) {
+    case ESP_RST_UNKNOWN: return "UNKNOWN";
+    case ESP_RST_POWERON: return "POWERON";
+    case ESP_RST_EXT: return "EXT";
+    case ESP_RST_SW: return "SW";
+    case ESP_RST_PANIC: return "PANIC";
+    case ESP_RST_INT_WDT: return "INT_WDT";
+    case ESP_RST_TASK_WDT: return "TASK_WDT";
+    case ESP_RST_WDT: return "WDT";
+    case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+    case ESP_RST_BROWNOUT: return "BROWNOUT";
+    case ESP_RST_SDIO: return "SDIO";
+    case ESP_RST_USB: return "USB";
+    case ESP_RST_JTAG: return "JTAG";
+    case ESP_RST_EFUSE: return "EFUSE";
+    case ESP_RST_PWR_GLITCH: return "PWR_GLITCH";
+    case ESP_RST_CPU_LOCKUP: return "CPU_LOCKUP";
+    default: return "UNMAPPED";
+  }
+}
+
+static void formatEpochUtc(int64_t epoch, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  if (epoch <= 0) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  time_t t = (time_t)epoch;
+  struct tm tmUtc = {};
+  gmtime_r(&t, &tmUtc);
+  snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d UTC",
+           tmUtc.tm_year + 1900, tmUtc.tm_mon + 1, tmUtc.tm_mday,
+           tmUtc.tm_hour, tmUtc.tm_min, tmUtc.tm_sec);
+}
+
+static void reset_history_append(ResetHistory* hist, const ResetEvent* ev) {
+  if (!hist || !ev) return;
+  uint32_t idx = hist->next % DIAG_RESET_HISTORY_MAX;
+  hist->entries[idx] = *ev;
+  hist->next = (idx + 1) % DIAG_RESET_HISTORY_MAX;
+  if (hist->count < DIAG_RESET_HISTORY_MAX) hist->count++;
+}
+
+static void reset_history_log(const ResetHistory* hist, const char* context) {
+  if (!hist) return;
+  ESP_LOGI(TAG, "Reset history (%s): count=%lu", context ? context : "n/a",
+           (unsigned long)hist->count);
+  if (hist->count == 0) {
+    ESP_LOGI(TAG, "Reset history: empty");
+    return;
+  }
+  uint32_t oldest = (hist->next + DIAG_RESET_HISTORY_MAX - hist->count) % DIAG_RESET_HISTORY_MAX;
+  for (uint32_t i = 0; i < hist->count; i++) {
+    uint32_t idx = (oldest + i) % DIAG_RESET_HISTORY_MAX;
+    const ResetEvent& e = hist->entries[idx];
+    char ts[32] = {};
+    formatEpochUtc(e.epoch, ts, sizeof(ts));
+    ESP_LOGI(TAG, "Reset[%lu]: boot_count=%lu reason=%s(%lu) time=%s",
+             (unsigned long)i,
+             (unsigned long)e.bootCount,
+             resetReasonToStr((esp_reset_reason_t)e.resetReason), (unsigned long)e.resetReason,
+             ts);
+  }
+}
+
+static void recordBootDiagnostics() {
+  gCurrentResetReason = esp_reset_reason();
+  nvs_handle_t h = 0;
+  esp_err_t err = nvs_open(DIAG_NS, NVS_READWRITE, &h);
+  if (err != ESP_OK) {
+    ESP_LOGW(TAG, "Boot diag NVS open failed: %s", esp_err_to_name(err));
+    return;
+  }
+
+  uint32_t bootCount = 0;
+  uint32_t prevReason = (uint32_t)ESP_RST_UNKNOWN;
+  int64_t prevEpoch = 0;
+  ResetHistory hist = {};
+  size_t histSize = sizeof(hist);
+  (void)nvs_get_u32(h, DIAG_KEY_BOOT_COUNT, &bootCount);
+  (void)nvs_get_u32(h, DIAG_KEY_LAST_RESET, &prevReason);
+  (void)nvs_get_i64(h, DIAG_KEY_LAST_RESET_EPOCH, &prevEpoch);
+  esp_err_t histErr = nvs_get_blob(h, DIAG_KEY_RESET_HISTORY, &hist, &histSize);
+  if (histErr != ESP_OK || histSize != sizeof(hist) ||
+      hist.count > DIAG_RESET_HISTORY_MAX || hist.next >= DIAG_RESET_HISTORY_MAX) {
+    memset(&hist, 0, sizeof(hist));
+  }
+
+  gBootCount = bootCount + 1;
+  gPrevResetReason = (esp_reset_reason_t)prevReason;
+  gPrevResetEpoch = prevEpoch;
+  time_t rtcEpoch = 0;
+  if (rtc_read_epoch(&rtcEpoch)) {
+    gCurrentResetEpoch = (int64_t)rtcEpoch;
+  } else {
+    gCurrentResetEpoch = 0;
+  }
+
+  (void)nvs_set_u32(h, DIAG_KEY_BOOT_COUNT, gBootCount);
+  (void)nvs_set_u32(h, DIAG_KEY_LAST_RESET, (uint32_t)gCurrentResetReason);
+  if (gCurrentResetEpoch > 0) {
+    (void)nvs_set_i64(h, DIAG_KEY_LAST_RESET_EPOCH, gCurrentResetEpoch);
+  }
+  ResetEvent ev = {};
+  ev.bootCount = gBootCount;
+  ev.resetReason = (uint32_t)gCurrentResetReason;
+  ev.epoch = gCurrentResetEpoch;
+  reset_history_append(&hist, &ev);
+  gResetHistory = hist;
+  (void)nvs_set_blob(h, DIAG_KEY_RESET_HISTORY, &hist, sizeof(hist));
+  (void)nvs_commit(h);
+  nvs_close(h);
+
+  char prevTs[32] = {};
+  char currTs[32] = {};
+  formatEpochUtc(gPrevResetEpoch, prevTs, sizeof(prevTs));
+  formatEpochUtc(gCurrentResetEpoch, currTs, sizeof(currTs));
+  ESP_LOGI(TAG, "Boot diag: boot_count=%lu prev_reset=%s(%u) prev_time=%s current_reset=%s(%u) current_time=%s",
+           (unsigned long)gBootCount,
+           resetReasonToStr(gPrevResetReason), (unsigned)gPrevResetReason,
+           prevTs,
+           resetReasonToStr(gCurrentResetReason), (unsigned)gCurrentResetReason,
+           currTs);
+  reset_history_log(&gResetHistory, "boot");
+}
 
 static bsec_virtual_sensor_t sensorList[] = {
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
@@ -872,8 +1028,6 @@ static bool read_rtc_utc(RtcDateTime* out) {
   return true;
 }
 
-static bool rtc_read_epoch(time_t* out);
-
 static time_t rtc_time_to_epoch(const RtcDateTime& dt) {
   char tz_buf[64] = {};
   const char* tz_old = getenv("TZ");
@@ -1376,6 +1530,19 @@ static void handleDisplaySerialCommands() {
                    (int)gNetTimeValid,
                    (unsigned long)gRtcSyncIntervalMs,
                    (long)min_valid_epoch());
+        } else if (strcmp(buf, "rebootcause") == 0) {
+          char prevTs[32] = {};
+          char currTs[32] = {};
+          formatEpochUtc(gPrevResetEpoch, prevTs, sizeof(prevTs));
+          formatEpochUtc(gCurrentResetEpoch, currTs, sizeof(currTs));
+          ESP_LOGI(TAG, "Boot diag: boot_count=%lu prev_reset=%s(%u) prev_time=%s current_reset=%s(%u) current_time=%s",
+                   (unsigned long)gBootCount,
+                   resetReasonToStr(gPrevResetReason), (unsigned)gPrevResetReason,
+                   prevTs,
+                   resetReasonToStr(gCurrentResetReason), (unsigned)gCurrentResetReason,
+                   currTs);
+        } else if (strcmp(buf, "reboothistory") == 0) {
+          reset_history_log(&gResetHistory, "serial");
         }
       }
       idx = 0;
@@ -1484,11 +1651,15 @@ static void sensor_task(void*) {
       ClockTime ct = readClockTime();
       int h12 = ct.hour % 12;
       if (h12 == 0) h12 = 12;
+      const UBaseType_t hwmWords = uxTaskGetStackHighWaterMark(nullptr);
+      const size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       ESP_LOGI(TAG, "RTC %02u:%02u:%02u (%s) | Display %02d:%02d:%02u | Temp %.1f F | RH %.1f%%",
                ct.hour, ct.minute, ct.second, ct.pm ? "PM" : "AM",
                h12, ct.minute, ct.second,
                (double)(vTempC * 9.0f / 5.0f + 32.0f),
                (double)vHum);
+      ESP_LOGI(TAG, "Health: free_heap=%uB sensor_stack_hwm=%uB",
+               (unsigned)freeHeap, (unsigned)(hwmWords * sizeof(StackType_t)));
       lastLogMs = now;
     }
 
@@ -1532,6 +1703,7 @@ extern "C" void app_main() {
 #endif
 
   init_i2c();
+  recordBootDiagnostics();
   init_bsec();
   init_veml7700();
   setenv("TZ", LOCAL_TZ, 1);
