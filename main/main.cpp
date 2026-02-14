@@ -10,7 +10,7 @@
 // Set to 1 to completely disable Matter/network time sync.
 // When disabled, the external DS3231 remains the only authority.
 #if !defined(DISABLE_TIME_SYNC)
-#define DISABLE_TIME_SYNC 0
+#define DISABLE_TIME_SYNC 1
 #endif
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
