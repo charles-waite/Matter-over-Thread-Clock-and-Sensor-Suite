@@ -3,7 +3,9 @@
 ESP32-C6 (Seeed XIAO) clock + environmental sensor suite with Matter over Thread, BME680/BSEC2, DS3231 RTC, VEML7700, and a TLC5947/TBD62783APG-muxed 7-seg display.
 
 ## Notes
-- RTC is synced monthly using Matter/system time with SNTP-over-Thread fallback (pool.ntp.org).
+- DS3231 RTC is the primary clock source.
+- Matter time is correction-only: after commissioning/reconnect with grace delay, RTC is updated only when drift exceeds threshold.
+- No compile-time fallback is used for RTC/system time initialization.
 - Display tuning defaults: `DISPLAY_PAGE_PERIOD_US=2500`, `TLC_ON=1600`, `RH_ON=4095` (see `main/main.cpp`).
 - ALS brightness scaling is enabled by default; `pwm <x>` overrides it until `pwm auto`.
 - Serial commands are documented in `AGENTS.md` (via USB-Serial/JTAG when available).
@@ -20,6 +22,9 @@ The following are the current behavior in `main/main.cpp`, described in plain la
 - `pwm <1..4095>` / `pwm auto`
 - `refresh <us>` / `display`
 - `rtc` / `rtc YYYY-MM-DD HH:MM:SS`
+- `timesync`: print time-sync status (`commissioned`, thread attach, net-valid, interval, validity floor)
+- `timesync now`: run immediate Matter-vs-RTC drift check/correction
+- `timesync interval <seconds>` / `timesync interval default`
 - `loginfo on|off`
 
 ## Build Flags & Tunables
@@ -48,7 +53,8 @@ These live near the top of `main/main.cpp`.
   - Absolute max PWM; used for scaling ALS and safety clamping.
 
 - `RTC_SYNC_INTERVAL_MS` (default: 30 days)
-  - How often RTC resync runs.
+  - Default periodic RTC drift-check interval.
+  - Runtime override is available via `timesync interval <seconds>`.
 
 - `RTC_SYNC_MATTER_TIMEOUT_MS` (default: 60s)
   - How long we wait for Matter/system time before falling back.
@@ -57,7 +63,7 @@ These live near the top of `main/main.cpp`.
   - SNTP sync timeout during fallback.
 
 - `RTC_VALID_EPOCH` (default: 1700000000)
-  - System time must be after this to be considered valid.
+  - Lower bound for valid time; effective floor is `max(RTC_VALID_EPOCH, build_time_epoch)`.
 
 - `DISPLAY_TEST_MODE` / `DISPLAY_RH_TEST_MODE` (default: false)
   - Build‑time test patterns for wiring/brightness validation.

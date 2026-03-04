@@ -1,7 +1,6 @@
 dependencies:
   espressif/cbor:
-    component_hash: 
-      dad9ca860963e930366510a10b422b3125a4fb27b979712ed65efcbcd742de50
+    component_hash: dad9ca860963e930366510a10b422b3125a4fb27b979712ed65efcbcd742de50
     dependencies:
     - name: idf
       require: private
@@ -11,16 +10,14 @@ dependencies:
       type: service
     version: 0.6.1~4
   espressif/esp-serial-flasher:
-    component_hash: 
-      dcc42a16712a1a636509cf0bf90e14032d7f2141784b533613b267b6aa318d52
+    component_hash: dcc42a16712a1a636509cf0bf90e14032d7f2141784b533613b267b6aa318d52
     dependencies: []
     source:
       registry_url: https://components.espressif.com
       type: service
     version: 0.0.11
   espressif/esp_delta_ota:
-    component_hash: 
-      147161b602ef51e9f6649eb6d90c4d4ac3c94228cb264fa0e68be7877180462d
+    component_hash: 147161b602ef51e9f6649eb6d90c4d4ac3c94228cb264fa0e68be7877180462d
     dependencies:
     - name: idf
       require: private
@@ -30,8 +27,7 @@ dependencies:
       type: service
     version: 1.1.4
   espressif/esp_diag_data_store:
-    component_hash: 
-      93f20de81abb791b4482f1bc99afdc24b25c3ee42aacceeb636e9943e677b1c5
+    component_hash: 93f20de81abb791b4482f1bc99afdc24b25c3ee42aacceeb636e9943e677b1c5
     dependencies:
     - name: idf
       require: private
@@ -41,23 +37,21 @@ dependencies:
       type: service
     version: 1.1.0
   espressif/esp_diagnostics:
-    component_hash: 
-      405803b11fbccfd9c8a26df0b1228081f588ffdb7d1e0c754300e7a2c6241aab
+    component_hash: 3a343e70981039e1e8840754ab02a7f4cdc3823569e4962d0b3f176a0a481488
     dependencies:
     - name: espressif/rmaker_common
       registry_url: https://components.espressif.com
       require: private
-      version: ~1.5.0
+      version: ^1.5
     - name: idf
       require: private
       version: '>=5.1'
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.3.0
+    version: 1.3.1
   espressif/esp_encrypted_img:
-    component_hash: 
-      e5a065c140fbc6a69a1de4fa1731b7596cc34a4a50b57913b2dc34c9ad3a0a70
+    component_hash: e5a065c140fbc6a69a1de4fa1731b7596cc34a4a50b57913b2dc34c9ad3a0a70
     dependencies:
     - name: idf
       require: private
@@ -67,8 +61,7 @@ dependencies:
       type: service
     version: 2.3.0
   espressif/esp_insights:
-    component_hash: 
-      5a394c1eacddff2dbeff840abb0108ad5f54fb076048520b50c3f4a9b59415fe
+    component_hash: c7584927b81f9a55dfa6c8334968cf57b7cb662bfb1c7ac82856764db174ff33
     dependencies:
     - name: espressif/cbor
       registry_url: https://components.espressif.com
@@ -85,17 +78,16 @@ dependencies:
     - name: espressif/rmaker_common
       registry_url: https://components.espressif.com
       require: private
-      version: ~1.5.0
+      version: ^1.5
     - name: idf
       require: private
       version: '>=5.1'
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.3.1
+    version: 1.3.2
   espressif/esp_matter:
-    component_hash: 
-      b0c2eddb10be292cbd79b49265e10afb7fd5dd0c58b900fd9971b4a4dba5c716
+    component_hash: b0c2eddb10be292cbd79b49265e10afb7fd5dd0c58b900fd9971b4a4dba5c716
     dependencies:
     - name: espressif/esp_delta_ota
       registry_url: https://components.espressif.com
@@ -153,8 +145,7 @@ dependencies:
       type: service
     version: 1.4.2
   espressif/esp_rcp_update:
-    component_hash: 
-      37f535edd527a45faeaad649c0c56af36e5399074e52d83f0990fce466844dde
+    component_hash: 37f535edd527a45faeaad649c0c56af36e5399074e52d83f0990fce466844dde
     dependencies:
     - name: espressif/esp-serial-flasher
       registry_url: https://components.espressif.com
@@ -168,8 +159,7 @@ dependencies:
       type: service
     version: 1.3.1
   espressif/esp_secure_cert_mgr:
-    component_hash: 
-      29248e402b2014394228b289a3c02fdb1dc43168ef18fc83449a868dfbc2341f
+    component_hash: 29248e402b2014394228b289a3c02fdb1dc43168ef18fc83449a868dfbc2341f
     dependencies:
     - name: idf
       require: private
@@ -179,8 +169,7 @@ dependencies:
       type: service
     version: 2.8.0
   espressif/jsmn:
-    component_hash: 
-      d80350c41bbaa827c98a25b6072df00884e72f54885996fab4a4f0aebce6b6c3
+    component_hash: d80350c41bbaa827c98a25b6072df00884e72f54885996fab4a4f0aebce6b6c3
     dependencies:
     - name: idf
       require: private
@@ -190,16 +179,14 @@ dependencies:
       type: service
     version: 1.1.0
   espressif/json_generator:
-    component_hash: 
-      45033e1c199b13f1c8c1b544fb7d4e2df6a8e3071ebdcb1b22582b61a7974ff2
+    component_hash: 45033e1c199b13f1c8c1b544fb7d4e2df6a8e3071ebdcb1b22582b61a7974ff2
     dependencies: []
     source:
       registry_url: https://components.espressif.com
       type: service
     version: 1.1.2
   espressif/json_parser:
-    component_hash: 
-      d74b81729ad06ec11ff5eb5b1b0d7df1d00e6027fc11471f4b139c70dcf1b1e4
+    component_hash: d74b81729ad06ec11ff5eb5b1b0d7df1d00e6027fc11471f4b139c70dcf1b1e4
     dependencies:
     - name: espressif/jsmn
       registry_url: https://components.espressif.com
@@ -212,8 +199,7 @@ dependencies:
       type: service
     version: 1.0.3
   espressif/mdns:
-    component_hash: 
-      29e47564b1a7ee778135e17fbbf2a2773f71c97ebabfe626c8eda7c958a7ad16
+    component_hash: 29e47564b1a7ee778135e17fbbf2a2773f71c97ebabfe626c8eda7c958a7ad16
     dependencies:
     - name: idf
       require: private
@@ -223,8 +209,7 @@ dependencies:
       type: service
     version: 1.9.1
   espressif/rmaker_common:
-    component_hash: 
-      842d2aaf486a24f11827a86b1147ee8ac7e1881f45e3d65a2141aff5bcbf276a
+    component_hash: f7c08e1ae648085b32d219c7c2598685f88e889dcaf31d7695638682d4456562
     dependencies:
     - name: idf
       require: private
@@ -232,7 +217,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 1.5.3
+    version: 1.6.0
   idf:
     source:
       type: idf
@@ -240,6 +225,6 @@ dependencies:
 direct_dependencies:
 - espressif/esp_matter
 - idf
-manifest_hash: 1217596e8e2a5433a7e8584c01579b73b477f2347ffc963e2499ae638b9739f3
+manifest_hash: 660b36138082d1e3acc8677ec5a7685e6fda0e11b628fa3ec809c01fb6a4c350
 target: esp32c6
 version: 2.0.0
