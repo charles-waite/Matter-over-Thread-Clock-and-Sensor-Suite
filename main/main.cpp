@@ -6,11 +6,15 @@
 #include <time.h>
 // For settimeofday
 #include <sys/time.h>
-// -------------------- Time Sync Kill Switch --------------------
-// Set to 1 to completely disable Matter/network time sync.
-// When disabled, the external DS3231 remains the only authority.
+// -------------------- Time Sync Controls --------------------
+// Set to 1 to disable Matter/network time client init+poll entirely.
 #if !defined(DISABLE_TIME_SYNC)
-#define DISABLE_TIME_SYNC 1
+#define DISABLE_TIME_SYNC 0
+#endif
+// Set to 1 to allow network->RTC correction writes.
+// Default 0 keeps DS3231 as strict authority while allowing diagnostics/probing.
+#if !defined(ENABLE_RTC_TIME_CORRECTION)
+#define ENABLE_RTC_TIME_CORRECTION 0
 #endif
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
@@ -19,7 +23,10 @@
 #include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_netif_ip_addr.h"
+#include "esp_netif_sntp.h"
 #include "esp_heap_caps.h"
+#include "esp_mac.h"
+#include "lwip/netdb.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
@@ -87,6 +94,10 @@ static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
 static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 1000UL;
+static constexpr uint32_t NTPC_RETRY_INTERVAL_MS = 30UL * 60UL * 1000UL;
+static constexpr uint32_t NTPC_SYNC_TIMEOUT_MS = 20UL * 1000UL;
+static constexpr const char* NTPC_PRIMARY_SERVER = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static constexpr const char* NTPC_FALLBACK_SERVER = "pool.ntp.org";
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 // Set to false if RTC stores local time instead of UTC.
 static constexpr bool RTC_STORES_UTC = true;
@@ -135,6 +146,7 @@ volatile float vCO2eq = NAN;
 volatile uint8_t vIAQacc = 0;
 static volatile bool gBrightnessOverride = false;
 static TaskHandle_t gRtcSyncTask = nullptr;
+static TaskHandle_t gNtpcSyncTask = nullptr;
 static volatile bool gLogInfoPinned = false;
 static volatile bool gThreadAttached = false;
 static volatile bool gCommissioned = false;
@@ -151,6 +163,9 @@ static esp_reset_reason_t gPrevResetReason = ESP_RST_UNKNOWN;
 static esp_reset_reason_t gCurrentResetReason = ESP_RST_UNKNOWN;
 static int64_t gPrevResetEpoch = 0;
 static int64_t gCurrentResetEpoch = 0;
+static volatile bool gTimeSyncReadyCbSeen = false;
+static volatile int64_t gLastTimeSyncReadyUtc = 0;
+static TaskHandle_t gTimeProbeTask = nullptr;
 
 static bool rtc_read_epoch(time_t* out);
 
@@ -202,6 +217,21 @@ static void formatEpochUtc(int64_t epoch, char* out, size_t outLen) {
   snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d UTC",
            tmUtc.tm_year + 1900, tmUtc.tm_mon + 1, tmUtc.tm_mday,
            tmUtc.tm_hour, tmUtc.tm_min, tmUtc.tm_sec);
+}
+
+static void formatEpochLocal(int64_t epoch, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  if (epoch <= 0) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  time_t t = (time_t)epoch;
+  struct tm tmLocal = {};
+  localtime_r(&t, &tmLocal);
+  snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d %s",
+           tmLocal.tm_year + 1900, tmLocal.tm_mon + 1, tmLocal.tm_mday,
+           tmLocal.tm_hour, tmLocal.tm_min, tmLocal.tm_sec,
+           tmLocal.tm_isdst > 0 ? "DST" : "STD");
 }
 
 static void reset_history_append(ResetHistory* hist, const ResetEvent* ev) {
@@ -324,6 +354,14 @@ static i2c_master_bus_handle_t i2cBus = nullptr;
 static i2c_master_dev_handle_t bmeDev = nullptr;
 static i2c_master_dev_handle_t rtcDev = nullptr;
 static i2c_master_dev_handle_t vemlDev = nullptr;
+static bool gHasBme680 = false;
+static bool gHasRtc = false;
+static bool gHasVeml7700 = false;
+
+static bool i2c_probe_addr(uint8_t addr) {
+  if (!i2cBus) return false;
+  return i2c_master_probe(i2cBus, addr, 50) == ESP_OK;
+}
 
 static int8_t i2c_read_bytes(uint8_t reg, uint8_t* data, uint32_t len, void*) {
   if (!bmeDev) return -1;
@@ -517,8 +555,263 @@ static void request_rtc_sync(const char* reason);
 static void schedule_initial_rtc_sync(const char* reason);
 static void ensure_thread_default_netif(const char* reason);
 static bool is_commissioned();
+static bool sync_rtc_from_epoch(time_t now, const char* source);
+static void ntpc_log_network_state() {
+  esp_netif_t* def = esp_netif_get_default_netif();
+  if (!def) {
+    ESP_LOGW(TAG, "NTPC sync: no default netif");
+    return;
+  }
+  esp_ip6_addr_t ll = {};
+  esp_ip6_addr_t gl = {};
+  esp_err_t llErr = esp_netif_get_ip6_linklocal(def, &ll);
+  esp_err_t glErr = esp_netif_get_ip6_global(def, &gl);
+  ESP_LOGI(TAG, "NTPC sync: netif ip6 linklocal=%s global=%s",
+           llErr == ESP_OK ? "yes" : "no",
+           glErr == ESP_OK ? "yes" : "no");
+}
+
+static bool ntpc_can_resolve_server(const char* server) {
+  if (!server || !server[0]) return false;
+  struct addrinfo hints = {};
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_DGRAM;
+  struct addrinfo* res = nullptr;
+  int rc = getaddrinfo(server, "123", &hints, &res);
+  if (rc != 0) {
+    ESP_LOGW(TAG, "NTPC sync: DNS resolve failed for %s: rc=%d", server, rc);
+    return false;
+  }
+  freeaddrinfo(res);
+  ESP_LOGI(TAG, "NTPC sync: DNS resolve OK for %s", server);
+  return true;
+}
+
+static bool ntpc_sync_with_server(const char* server, uint32_t timeoutMs) {
+  if (!server || !server[0]) return false;
+  if (timeoutMs < 1000) timeoutMs = 1000;
+
+  ensure_thread_default_netif("ntpc");
+  ntpc_log_network_state();
+  (void)ntpc_can_resolve_server(server);
+  ESP_LOGI(TAG, "NTPC sync: starting (server=%s)", server);
+
+  esp_netif_sntp_deinit();
+  esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG(server);
+  cfg.start = true;
+  if (esp_netif_sntp_init(&cfg) != ESP_OK) {
+    ESP_LOGW(TAG, "NTPC sync: init failed");
+    return false;
+  }
+
+  uint32_t start = millis_ms();
+  bool ok = false;
+  while ((millis_ms() - start) < timeoutMs) {
+    if (esp_netif_sntp_sync_wait(pdMS_TO_TICKS(1000)) == ESP_OK) {
+      ok = true;
+      break;
+    }
+  }
+
+  if (ok) {
+    struct timeval tv = {};
+    gettimeofday(&tv, nullptr);
+    time_t now = tv.tv_sec;
+    if (now >= min_valid_epoch()) {
+      char utcBuf[32] = {};
+      char localBuf[40] = {};
+      formatEpochUtc((int64_t)now, utcBuf, sizeof(utcBuf));
+      formatEpochLocal((int64_t)now, localBuf, sizeof(localBuf));
+      ESP_LOGI(TAG, "NTPC sync: success utc=%s local=%s", utcBuf, localBuf);
+
+      time_t rtcEpoch = 0;
+      if (rtc_read_epoch(&rtcEpoch)) {
+        const int64_t ntpUs = (int64_t)tv.tv_sec * 1000000LL + (int64_t)tv.tv_usec;
+        const int64_t rtcUs = (int64_t)rtcEpoch * 1000000LL;
+        const double driftSec = (double)(ntpUs - rtcUs) / 1000000.0;
+        const char* relation = driftSec >= 0.0 ? "behind" : "ahead";
+        ESP_LOGI(TAG,
+                 "NTPC compare: ntp_epoch=%" PRId64 " ntp_usec=%ld rtc_epoch=%ld drift_sec=%.4f relation=%s",
+                 (int64_t)tv.tv_sec, (long)tv.tv_usec, (long)rtcEpoch, driftSec, relation);
+#if ENABLE_RTC_TIME_CORRECTION
+        ESP_LOGI(TAG, "Syncing local RTC to NTP time...");
+        bool rtcOk = sync_rtc_from_epoch(now, "NTPC");
+        ESP_LOGI(TAG, "RTC sync to NTP %s", rtcOk ? "SUCCEEDED" : "FAILED");
+#else
+        ESP_LOGI(TAG, "RTC correction disabled (ENABLE_RTC_TIME_CORRECTION=0); compare-only mode");
+#endif
+      } else {
+        ESP_LOGW(TAG, "NTPC compare: RTC read failed");
+      }
+
+      gNetTimeValid = true;
+      gTimeSyncReadyCbSeen = true;
+      gLastTimeSyncReadyUtc = (int64_t)now;
+    } else {
+      ESP_LOGW(TAG, "NTPC sync: got invalid epoch %ld", (long)now);
+      ok = false;
+    }
+  } else {
+    ESP_LOGW(TAG, "NTPC sync: timed out");
+  }
+  esp_netif_sntp_deinit();
+  return ok;
+}
+
+static bool ntpc_sync_once(uint32_t timeoutMs) {
+  if (ntpc_sync_with_server(NTPC_PRIMARY_SERVER, timeoutMs)) return true;
+  ESP_LOGI(TAG, "NTPC sync: retrying with alternate server (%s)", NTPC_FALLBACK_SERVER);
+  return ntpc_sync_with_server(NTPC_FALLBACK_SERVER, timeoutMs);
+}
+
+static void ntpc_time_sync_task(void*) {
+  gNtpcSyncTask = xTaskGetCurrentTaskHandle();
+  vTaskDelay(pdMS_TO_TICKS(20000));
+  while (true) {
+    bool commissioned = gCommissioned || is_commissioned();
+    if (!commissioned) {
+      vTaskDelay(pdMS_TO_TICKS(10000));
+      continue;
+    }
+    if (!gNetTimeValid) {
+      (void)ntpc_sync_once(NTPC_SYNC_TIMEOUT_MS);
+    }
+    vTaskDelay(pdMS_TO_TICKS(NTPC_RETRY_INTERVAL_MS));
+  }
+}
+
+static bool get_time_sync_source(uint8_t* sourceOut, bool* hasSourceOut) {
+  if (sourceOut) *sourceOut = 0;
+  if (hasSourceOut) *hasSourceOut = false;
+  using namespace chip::app::Clusters;
+  esp_matter::attribute_t* srcAttr =
+      esp_matter::attribute::get(0, TimeSynchronization::Id, TimeSynchronization::Attributes::TimeSource::Id);
+  if (srcAttr) {
+    if (hasSourceOut) *hasSourceOut = true;
+    esp_matter_attr_val_t srcVal = esp_matter_invalid(nullptr);
+    if (esp_matter::attribute::get_val(srcAttr, &srcVal) == ESP_OK) {
+      if (sourceOut && (srcVal.type == ESP_MATTER_VAL_TYPE_ENUM8 || srcVal.type == ESP_MATTER_VAL_TYPE_UINT8)) {
+        *sourceOut = srcVal.val.u8;
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+static void log_time_sync_conformance(esp_matter::node_t* node) {
+  using namespace chip::app::Clusters;
+  using namespace esp_matter;
+  endpoint_t* root = node ? endpoint::get(node, 0) : nullptr;
+  cluster_t* ts = root ? cluster::get(root, TimeSynchronization::Id) : nullptr;
+  ESP_LOGI(TAG, "TimeSync spec: root_endpoint=%s cluster_0x0038=%s",
+           root ? "present" : "missing",
+           ts ? "present" : "missing");
+  if (!ts) return;
+
+  auto hasAttr = [](uint32_t attributeId) -> bool {
+    return esp_matter::attribute::get(0, TimeSynchronization::Id, attributeId) != nullptr;
+  };
+  auto hasCmd = [](uint32_t commandId) -> bool {
+    return esp_matter::command::get(0, TimeSynchronization::Id, commandId) != nullptr;
+  };
+
+  uint32_t featureMap = 0;
+  esp_matter_attr_val_t fm = esp_matter_invalid(nullptr);
+  bool fmOk = false;
+  if (auto* fmAttr = esp_matter::attribute::get(0, TimeSynchronization::Id, Globals::Attributes::FeatureMap::Id)) {
+    if (esp_matter::attribute::get_val(fmAttr, &fm) == ESP_OK) {
+      if (fm.type == ESP_MATTER_VAL_TYPE_BITMAP32 || fm.type == ESP_MATTER_VAL_TYPE_UINT32) {
+        featureMap = fm.val.u32;
+        fmOk = true;
+      }
+    }
+  }
+  ESP_LOGI(TAG,
+           "TimeSync spec: feature_map=%s value=0x%08" PRIX32 " [TZ=%d NTPC=%d NTPS=%d TSC=%d]",
+           fmOk ? "ok" : "unavailable",
+           featureMap,
+           (int)((featureMap & (1u << 0)) != 0),
+           (int)((featureMap & (1u << 1)) != 0),
+           (int)((featureMap & (1u << 2)) != 0),
+           (int)((featureMap & (1u << 3)) != 0));
+
+  ESP_LOGI(TAG,
+           "TimeSync spec: attrs UTCTime=%d Granularity=%d TimeSource=%d TimeZone=%d DSTOffset=%d LocalTime=%d",
+           (int)hasAttr(TimeSynchronization::Attributes::UTCTime::Id),
+           (int)hasAttr(TimeSynchronization::Attributes::Granularity::Id),
+           (int)hasAttr(TimeSynchronization::Attributes::TimeSource::Id),
+           (int)hasAttr(TimeSynchronization::Attributes::TimeZone::Id),
+           (int)hasAttr(TimeSynchronization::Attributes::DSTOffset::Id),
+           (int)hasAttr(TimeSynchronization::Attributes::LocalTime::Id));
+
+  ESP_LOGI(TAG,
+           "TimeSync spec: cmds SetUTCTime=%d SetTimeZone=%d SetDSTOffset=%d SetDefaultNTP=%d SetTrustedTimeSource=%d",
+           (int)hasCmd(TimeSynchronization::Commands::SetUTCTime::Id),
+           (int)hasCmd(TimeSynchronization::Commands::SetTimeZone::Id),
+           (int)hasCmd(TimeSynchronization::Commands::SetDSTOffset::Id),
+           (int)hasCmd(TimeSynchronization::Commands::SetDefaultNTP::Id),
+           (int)hasCmd(TimeSynchronization::Commands::SetTrustedTimeSource::Id));
+}
+
+static void configure_root_time_clusters(esp_matter::node_t* node) {
+  if (!node) return;
+  using namespace chip::app::Clusters;
+  using namespace esp_matter;
+
+  endpoint_t* root = endpoint::get(node, 0);
+  if (!root) {
+    ESP_LOGW(TAG, "Time cluster setup: root endpoint missing");
+    return;
+  }
+
+  cluster_t* ts = cluster::get(root, TimeSynchronization::Id);
+  if (!ts) {
+    cluster::time_synchronization::config_t tsCfg;
+    ts = cluster::time_synchronization::create(root, &tsCfg, CLUSTER_FLAG_SERVER);
+  }
+  if (ts) {
+    cluster::time_synchronization::feature::time_zone::config_t tzCfg;
+    // No local TZ database on-device; controllers may still set timezone offsets.
+    tzCfg.time_zone_database = 2; // None
+    esp_err_t tzErr = cluster::time_synchronization::feature::time_zone::add(ts, &tzCfg);
+    ESP_LOGI(TAG, "Time cluster setup: TimeZone feature %s",
+             tzErr == ESP_OK ? "ENABLED" : "FAILED");
+
+    cluster::time_synchronization::feature::ntp_client::config_t ntpcCfg;
+    // Allow DNS-based NTP server names for SetDefaultNTP fallback.
+    ntpcCfg.supports_dns_resolve = true;
+    esp_err_t ntpcErr = cluster::time_synchronization::feature::ntp_client::add(ts, &ntpcCfg);
+    ESP_LOGI(TAG, "Time cluster setup: NTP Client feature %s",
+             ntpcErr == ESP_OK ? "ENABLED" : "FAILED");
+
+    esp_err_t tscErr = cluster::time_synchronization::feature::time_sync_client::add(ts);
+    ESP_LOGI(TAG, "Time cluster setup: TimeSyncClient feature %s",
+             tscErr == ESP_OK ? "ENABLED" : "FAILED");
+  }
+  ESP_LOGI(TAG, "Time cluster setup: TimeSynchronization endpoint=0 %s", ts ? "OK" : "FAILED");
+
+  cluster_t* loc = cluster::get(root, LocalizationConfiguration::Id);
+  if (!loc) {
+    cluster::localization_configuration::config_t locCfg;
+    strncpy(locCfg.active_locale, "en-US", sizeof(locCfg.active_locale) - 1);
+    loc = cluster::localization_configuration::create(root, &locCfg, CLUSTER_FLAG_SERVER);
+  }
+  ESP_LOGI(TAG, "Time cluster setup: LocalizationConfiguration endpoint=0 %s", loc ? "OK" : "FAILED");
+
+  cluster_t* tfl = cluster::get(root, TimeFormatLocalization::Id);
+  if (!tfl) {
+    cluster::time_format_localization::config_t tflCfg;
+    // Keep device default hour format selection; controllers may override.
+    tfl = cluster::time_format_localization::create(root, &tflCfg, CLUSTER_FLAG_SERVER);
+  }
+  ESP_LOGI(TAG, "Time cluster setup: TimeFormatLocalization endpoint=0 %s", tfl ? "OK" : "FAILED");
+}
+
 static void onTimeSyncReady(int64_t utc) {
   ESP_LOGI(TAG, "Matter time sync ready");
+  gTimeSyncReadyCbSeen = true;
+  gLastTimeSyncReadyUtc = utc;
   time_t floor = min_valid_epoch();
   if (utc >= (int64_t)floor) {
     gNetTimeValid = true;
@@ -529,6 +822,127 @@ static void onTimeSyncReady(int64_t utc) {
     }
   } else {
     ESP_LOGW(TAG, "Ignoring Matter time epoch %" PRId64 " (< validity floor %ld)", utc, (long)floor);
+  }
+}
+
+static void set_basic_info_identity() {
+  using namespace chip::app::Clusters;
+  uint8_t mac[6] = {};
+  if (esp_efuse_mac_get_default(mac) != ESP_OK) {
+    ESP_LOGW(TAG, "BasicInfo identity: failed to read MAC");
+    return;
+  }
+
+  char serial[20] = {};
+  snprintf(serial, sizeof(serial), "%02X%02X%02X%02X%02X%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  esp_matter_attr_val_t serialVal = esp_matter_char_str(serial, strlen(serial));
+  esp_err_t snErr = esp_matter::attribute::update(
+      0, BasicInformation::Id, BasicInformation::Attributes::SerialNumber::Id, &serialVal);
+  ESP_LOGI(TAG, "BasicInfo SerialNumber %s (%s)", snErr == ESP_OK ? "set" : "set failed", serial);
+
+  char unique[32] = {};
+  snprintf(unique, sizeof(unique), "ESP-CLOCK-%.12s", serial);
+  esp_matter_attr_val_t uniqueVal = esp_matter_char_str(unique, strlen(unique));
+  esp_err_t uidErr = esp_matter::attribute::update(
+      0, BasicInformation::Id, BasicInformation::Attributes::UniqueID::Id, &uniqueVal);
+  ESP_LOGI(TAG, "BasicInfo UniqueID %s (%s)", uidErr == ESP_OK ? "set" : "set failed", unique);
+}
+
+static void matter_time_probe_task(void* arg) {
+  uint32_t timeoutMs = (uint32_t)(uintptr_t)arg;
+  if (timeoutMs < 1000) timeoutMs = 1000;
+  ESP_LOGI(TAG, "Time probe: stage 1/4 start (timeout=%lu ms)", (unsigned long)timeoutMs);
+  ESP_LOGI(TAG, "Time probe: stage 2/4 precheck commissioned=%d thread=%d net_valid=%d cb_seen=%d",
+           (int)(gCommissioned || is_commissioned()),
+           (int)gThreadAttached,
+           (int)gNetTimeValid,
+           (int)gTimeSyncReadyCbSeen);
+
+  int64_t utc = 0;
+  uint8_t source = 0;
+  bool hasSource = false;
+  (void)get_time_sync_source(&source, &hasSource);
+  bool haveUtc = time_sync_now_utc(&utc);
+  // Matter-origin sources are >= 2 (Admin, NodeTimeCluster, NTP variants, etc.).
+  if (haveUtc && hasSource && source >= 2) {
+    char utcBuf[32] = {};
+    char localBuf[40] = {};
+    formatEpochUtc(utc, utcBuf, sizeof(utcBuf));
+    formatEpochLocal(utc, localBuf, sizeof(localBuf));
+    ESP_LOGI(TAG, "Time probe: stage 3/4 immediate fetch OK");
+    ESP_LOGI(TAG, "Time probe result: SUCCESS source=%u utc=%" PRId64 " (%s) local=%s",
+             (unsigned)source, utc, utcBuf, localBuf);
+    gTimeProbeTask = nullptr;
+    vTaskDelete(nullptr);
+    return;
+  }
+
+  bool cbSeenAtStart = gTimeSyncReadyCbSeen;
+  int64_t cbUtcAtStart = gLastTimeSyncReadyUtc;
+  if (hasSource) {
+    ESP_LOGI(TAG, "Time probe: stage 3/4 waiting for fresh Matter-origin time (source>=2)");
+  } else {
+    ESP_LOGI(TAG, "Time probe: stage 3/4 TimeSource attr missing; waiting for fresh time-sync callback");
+  }
+  uint32_t startMs = millis_ms();
+  uint32_t lastLogMs = startMs;
+  while ((millis_ms() - startMs) < timeoutMs) {
+    time_sync_poll();
+    source = 0;
+    hasSource = false;
+    (void)get_time_sync_source(&source, &hasSource);
+    haveUtc = time_sync_now_utc(&utc);
+    bool freshCb = gTimeSyncReadyCbSeen && (!cbSeenAtStart || gLastTimeSyncReadyUtc != cbUtcAtStart);
+    if ((haveUtc && hasSource && source >= 2) || (haveUtc && !hasSource && freshCb)) {
+      char utcBuf[32] = {};
+      char localBuf[40] = {};
+      formatEpochUtc(utc, utcBuf, sizeof(utcBuf));
+      formatEpochLocal(utc, localBuf, sizeof(localBuf));
+      ESP_LOGI(TAG, "Time probe: stage 4/4 fetch complete");
+      if (hasSource) {
+        ESP_LOGI(TAG, "Time probe result: SUCCESS source=%u utc=%" PRId64 " (%s) local=%s",
+                 (unsigned)source, utc, utcBuf, localBuf);
+      } else {
+        ESP_LOGI(TAG, "Time probe result: SUCCESS source=unavailable utc=%" PRId64 " (%s) local=%s",
+                 utc, utcBuf, localBuf);
+      }
+      gTimeProbeTask = nullptr;
+      vTaskDelete(nullptr);
+      return;
+    }
+    uint32_t nowMs = millis_ms();
+    if (nowMs - lastLogMs >= 1000) {
+      int64_t cbUtc = gLastTimeSyncReadyUtc;
+      char cbUtcBuf[32] = {};
+      formatEpochUtc(cbUtc, cbUtcBuf, sizeof(cbUtcBuf));
+      ESP_LOGI(TAG, "Time probe: waiting... elapsed=%lu ms has_time=%d source_attr=%d source=%u cb_seen=%d cb_utc=%s",
+               (unsigned long)(nowMs - startMs),
+               (int)time_sync_has_time(),
+               (int)hasSource,
+               (unsigned)source,
+               (int)gTimeSyncReadyCbSeen,
+               cbUtcBuf);
+      lastLogMs = nowMs;
+    }
+    vTaskDelay(pdMS_TO_TICKS(200));
+  }
+
+  ESP_LOGW(TAG, "Time probe result: FAILURE timed out after %lu ms", (unsigned long)timeoutMs);
+  gTimeProbeTask = nullptr;
+  vTaskDelete(nullptr);
+}
+
+static void request_matter_time_probe(uint32_t timeoutMs) {
+  if (gTimeProbeTask) {
+    ESP_LOGW(TAG, "Time probe already running");
+    return;
+  }
+  BaseType_t ok = xTaskCreate(matter_time_probe_task, "matter_time_probe", 4096,
+                              (void*)(uintptr_t)timeoutMs, 3, &gTimeProbeTask);
+  if (ok != pdPASS) {
+    gTimeProbeTask = nullptr;
+    ESP_LOGE(TAG, "Failed to start time probe task");
   }
 }
 
@@ -589,6 +1003,7 @@ static void matter_init() {
     ESP_LOGE(TAG, "Matter node create failed");
     return;
   }
+  configure_root_time_clusters(node);
 
   temperature_sensor::config_t temp_cfg;
   endpoint_t* temp_ep = temperature_sensor::create(node, &temp_cfg, ENDPOINT_FLAG_NONE, nullptr);
@@ -624,11 +1039,14 @@ static void matter_init() {
     matterCo2Enabled = true;
   }
 
+  log_time_sync_conformance(node);
+
   esp_err_t err = esp_matter::start(matter_event_callback);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Matter start failed: %s", esp_err_to_name(err));
     return;
   }
+  set_basic_info_identity();
   ESP_LOGI(TAG, "Matter started (temp=%u hum=%u air=%u)",
            matterTempEndpoint, matterHumEndpoint, matterAirEndpoint);
 #else
@@ -1508,6 +1926,17 @@ static void handleDisplaySerialCommands() {
         } else if (strcmp(buf, "timesync now") == 0) {
           request_rtc_drift_check_now("serial-timesync-now");
           ESP_LOGI(TAG, "Time sync: immediate drift check requested");
+        } else if (strncmp(buf, "timesync probe", 14) == 0) {
+          uint32_t timeoutSec = 20;
+          char* p = buf + 14;
+          while (*p == ' ') p++;
+          if (*p != '\0') {
+            uint32_t parsed = (uint32_t)strtoul(p, nullptr, 10);
+            if (parsed > 0) timeoutSec = parsed;
+          }
+          if (timeoutSec > 120) timeoutSec = 120;
+          request_matter_time_probe(timeoutSec * 1000UL);
+          ESP_LOGI(TAG, "Time probe requested (timeout=%lu s)", (unsigned long)timeoutSec);
         } else if (strncmp(buf, "timesync interval", 17) == 0) {
           char* p = buf + 17;
           while (*p == ' ') p++;
@@ -1543,6 +1972,13 @@ static void handleDisplaySerialCommands() {
                    currTs);
         } else if (strcmp(buf, "reboothistory") == 0) {
           reset_history_log(&gResetHistory, "serial");
+        } else if (strcmp(buf, "decom") == 0) {
+#if ESP_CLOCK_HAS_MATTER
+          ESP_LOGW(TAG, "Decommission requested via serial (factory reset scheduled)");
+          chip::Server::GetInstance().ScheduleFactoryReset();
+#else
+          ESP_LOGW(TAG, "Decommission unavailable: Matter not enabled");
+#endif
         }
       }
       idx = 0;
@@ -1575,9 +2011,22 @@ static void init_i2c() {
 
   dev_cfg.device_address = VEML7700_ADDR;
   ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBus, &dev_cfg, &vemlDev));
+
+  gHasBme680 = i2c_probe_addr(BME_ADDR);
+  gHasRtc = i2c_probe_addr(DS3231_ADDR);
+  gHasVeml7700 = i2c_probe_addr(VEML7700_ADDR);
+
+  ESP_LOGI(TAG, "I2C probe: BME680=%s RTC(DS3231)=%s VEML7700=%s",
+           gHasBme680 ? "present" : "missing",
+           gHasRtc ? "present" : "missing",
+           gHasVeml7700 ? "present" : "missing");
 }
 
 static void init_bsec() {
+  if (!gHasBme680) {
+    ESP_LOGW(TAG, "BME680 not detected; skipping BSEC init");
+    return;
+  }
   env.begin(BME68X_I2C_INTF, i2c_read_bytes, i2c_write_bytes, delay_us, nullptr, millis_ms);
   loadBsecState();
   env.updateSubscription(sensorList, sizeof(sensorList) / sizeof(sensorList[0]), BSEC_SAMPLE_RATE_LP);
@@ -1586,7 +2035,10 @@ static void init_bsec() {
 }
 
 static void init_veml7700() {
-  if (!vemlDev) return;
+  if (!vemlDev || !gHasVeml7700) {
+    ESP_LOGW(TAG, "VEML7700 not detected; ALS auto-brightness disabled");
+    return;
+  }
   // ALS_CONF_0 register (0x00): set to default-ish, power on.
   // 0x0000 is a safe baseline on most boards.
   uint8_t cfg[2] = {0x00, 0x00};
@@ -1621,7 +2073,7 @@ static void sensor_task(void*) {
     #if !DISABLE_TIME_SYNC
       time_sync_poll();
     #endif
-    if (!env.run()) {
+    if (gHasBme680 && !env.run()) {
       ESP_LOGW(TAG, "BSEC run returned false");
     }
     if (!threadConfigured) {
@@ -1644,10 +2096,10 @@ static void sensor_task(void*) {
     if (DISPLAY_RH_TEST_MODE) updateDisplayRhTestPattern();
     else if (DISPLAY_TEST_MODE) updateDisplayTestPattern();
     else updateDisplayFromState();
-    saveBsecStateIfReady(millis_ms());
+    if (gHasBme680) saveBsecStateIfReady(millis_ms());
     handleDisplaySerialCommands();
 
-    if (now - lastLogMs > 5000) {
+    if (now - lastLogMs > 30000) {
       ClockTime ct = readClockTime();
       int h12 = ct.hour % 12;
       if (h12 == 0) h12 = 12;
@@ -1759,7 +2211,12 @@ extern "C" void app_main() {
            1000000.0f / (display.pagePeriodUs() * 4.0f));
 
   xTaskCreate(sensor_task, "sensor_task", 8192, nullptr, 5, nullptr);
+  #if !DISABLE_TIME_SYNC && ENABLE_RTC_TIME_CORRECTION
+    xTaskCreate(rtc_time_sync_task, "rtc_time_sync", 4096, nullptr, 4, nullptr);
+  #else
+    ESP_LOGI(TAG, "RTC correction task disabled (ENABLE_RTC_TIME_CORRECTION=0)");
+  #endif
   #if !DISABLE_TIME_SYNC
-  xTaskCreate(rtc_time_sync_task, "rtc_time_sync", 4096, nullptr, 4, nullptr);
+    xTaskCreate(ntpc_time_sync_task, "ntpc_time_sync", 4096, nullptr, 4, nullptr);
   #endif
 }
