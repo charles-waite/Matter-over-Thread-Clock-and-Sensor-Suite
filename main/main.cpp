@@ -146,7 +146,6 @@ volatile uint8_t vIAQacc = 0;
 static volatile bool gBrightnessOverride = false;
 static TaskHandle_t gRtcSyncTask = nullptr;
 static SemaphoreHandle_t gRtcSyncMutex = nullptr;
-static volatile bool gLogInfoPinned = false;
 static volatile bool gThreadAttached = false;
 static volatile bool gCommissioned = false;
 static volatile bool gRtcInitialSyncDone = false;
@@ -1860,7 +1859,7 @@ static void print_serial_help() {
   printf("________RUNTIME DEBUG________\n");
     printf("help - Show this command list.\n");
     printf("loginfo on|off - Set esp_clock log level at runtime.\n");
-    printf("heapdiag on|off|reset - Control per-section heap diagnostics.\n");
+    printf("logheap on|off|reset - Control per-section heap diagnostics.\n");
     printf("rebootcause - Print previous/current reset reason.\n");
     printf("reboothistory - Print stored reset history ring.\n");
   printf("__________RTC DEBUG__________\n");
@@ -1899,26 +1898,24 @@ static void handleDisplaySerialCommands() {
           print_serial_help();
         } else if (strncmp(buf, "loginfo on", 10) == 0) {
           esp_log_level_set(TAG, ESP_LOG_INFO);
-          gLogInfoPinned = true;
           printf("esp_clock log level: INFO\n");
         } else if (strncmp(buf, "loginfo off", 11) == 0) {
           esp_log_level_set(TAG, ESP_LOG_ERROR);
-          gLogInfoPinned = true;
           printf("esp_clock log level: ERROR\n");
-        } else if (strcmp(buf, "heapdiag on") == 0) {
+        } else if (strcmp(buf, "logheap on") == 0 || strcmp(buf, "heapdiag on") == 0) {
           gHeapDiagEnabled = true;
           gHeapDiagLastFree = heap_caps_get_free_size(MALLOC_CAP_8BIT);
           gHeapDiagLastLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
           heap_diag_reset();
-          ESP_LOGI(TAG, "heapdiag: enabled");
-        } else if (strcmp(buf, "heapdiag off") == 0) {
+          ESP_LOGI(TAG, "logheap: enabled");
+        } else if (strcmp(buf, "logheap off") == 0 || strcmp(buf, "heapdiag off") == 0) {
           gHeapDiagEnabled = false;
-          ESP_LOGI(TAG, "heapdiag: disabled");
-        } else if (strcmp(buf, "heapdiag reset") == 0) {
+          ESP_LOGI(TAG, "logheap: disabled");
+        } else if (strcmp(buf, "logheap reset") == 0 || strcmp(buf, "heapdiag reset") == 0) {
           gHeapDiagLastFree = heap_caps_get_free_size(MALLOC_CAP_8BIT);
           gHeapDiagLastLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
           heap_diag_reset();
-          ESP_LOGI(TAG, "heapdiag: counters reset");
+          ESP_LOGI(TAG, "logheap: counters reset");
         } else if (strncmp(buf, "pwm auto", 8) == 0) {
           gBrightnessOverride = false;
           display.setScaleRh(true);
@@ -2233,12 +2230,14 @@ static void sensor_task(void*) {
       } else {
         ESP_LOGI(TAG, "Last NTP compare: none yet");
       }
-      size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-      ESP_LOGI(TAG, "Health: free_heap=%uB sensor_stack_hwm=%uB",
-               (unsigned)freeHeap, (unsigned)(hwmWords * sizeof(StackType_t)));
-      size_t heapAfterStatusLog = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-      heap_diag_account(HeapDiagBucket::StatusLogBlock, heapBeforeStatusLog, heapAfterStatusLog);
-      heap_diag_log_and_reset(logWindowMs);
+      if (gHeapDiagEnabled) {
+        size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        ESP_LOGI(TAG, "Health: free_heap=%uB sensor_stack_hwm=%uB",
+                 (unsigned)freeHeap, (unsigned)(hwmWords * sizeof(StackType_t)));
+        size_t heapAfterStatusLog = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+        heap_diag_account(HeapDiagBucket::StatusLogBlock, heapBeforeStatusLog, heapAfterStatusLog);
+        heap_diag_log_and_reset(logWindowMs);
+      }
       lastLogMs = now;
     }
 
@@ -2255,18 +2254,6 @@ extern "C" void app_main() {
     }
   }
   esp_log_level_set(TAG, ESP_LOG_INFO);
-  {
-    esp_timer_handle_t log_timer = nullptr;
-    esp_timer_create_args_t targs = {};
-    targs.callback = [](void*) {
-      if (!gLogInfoPinned) {
-        esp_log_level_set(TAG, ESP_LOG_ERROR);
-      }
-    };
-    targs.name = "loginfo_timeout";
-    esp_timer_create(&targs, &log_timer);
-    esp_timer_start_once(log_timer, 720ULL * 1000ULL * 1000ULL);
-  }
   gRtcSyncMutex = xSemaphoreCreateMutex();
   if (!gRtcSyncMutex) {
     ESP_LOGW(TAG, "RTC sync mutex create failed; sync operations may overlap");

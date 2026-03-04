@@ -1,0 +1,361 @@
+I (318268) esp_clock: RTC 2026-03-04 09:55:20 (AM) | Display 09:55:20 (AM) | Sys 2026-03-04 09:55:20 (AM) | Temp 64.4 F | RH 64.0%
+I (318269) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (318279) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (318285) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5120 ms
+I (318293) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (318302) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (323323) esp_clock: RTC 2026-03-04 09:55:25 (AM) | Display 09:55:25 (AM) | Sys 2026-03-04 09:55:25 (AM) | Temp 64.4 F | RH 64.2%
+I (323324) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (323334) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (323340) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5055 ms
+I (328361) esp_clock: RTC 2026-03-04 09:55:30 (AM) | Display 09:55:30 (AM) | Sys 2026-03-04 09:55:30 (AM) | Temp 64.4 F | RH 64.3%
+I (328362) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (328372) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (328378) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (333408) esp_clock: RTC 2026-03-04 09:55:35 (AM) | Display 09:55:35 (AM) | Sys 2026-03-04 09:55:36 (AM) | Temp 64.4 F | RH 64.3%
+I (333409) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (333419) esp_clock: Health: free_heap=195696B sensor_stack_hwm=5564B
+I (333425) esp_clock: HeapDiag: free=195696B (-1536) largest=176128B (+0) min=187508B window=5047 ms
+I (333434) esp_clock: HeapDiag[matter_update]: calls=25 net=+2828B loss_events=0 gain_events=1 worst_loss=0B
+I (333444) esp_clock: HeapDiag[display_update]: calls=25 net=+1628B loss_events=1 gain_events=1 worst_loss=1496B
+I (333454) esp_clock: HeapDiag[bsec_state_save]: calls=25 net=+376B loss_events=0 gain_events=1 worst_loss=0B
+I (338485) esp_clock: RTC 2026-03-04 09:55:41 (AM) | Display 09:55:41 (AM) | Sys 2026-03-04 09:55:41 (AM) | Temp 64.3 F | RH 64.4%
+I (338486) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (338496) esp_clock: Health: free_heap=194160B sensor_stack_hwm=5564B
+I (338502) esp_clock: HeapDiag: free=194160B (-1536) largest=176128B (+0) min=187508B window=5077 ms
+I (338511) esp_clock: HeapDiag[bsec_run]: calls=25 net=+2940B loss_events=0 gain_events=1 worst_loss=0B
+I (338520) esp_clock: HeapDiag[als_update]: calls=9 net=-12B loss_events=1 gain_events=0 worst_loss=12B
+I (338529) esp_clock: HeapDiag[display_update]: calls=25 net=+192B loss_events=0 gain_events=3 worst_loss=0B
+I (343551) esp_clock: RTC 2026-03-04 09:55:46 (AM) | Display 09:55:46 (AM) | Sys 2026-03-04 09:55:46 (AM) | Temp 64.3 F | RH 64.4%
+I (343552) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (343562) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (343568) esp_clock: HeapDiag: free=197232B (+3072) largest=176128B (+0) min=187508B window=5066 ms
+I (348585) esp_clock: RTC 2026-03-04 09:55:51 (AM) | Display 09:55:51 (AM) | Sys 2026-03-04 09:55:51 (AM) | Temp 64.3 F | RH 64.5%
+I (348585) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (348595) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (348602) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (348610) esp_clock: HeapDiag[display_update]: calls=25 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (353638) esp_clock: RTC 2026-03-04 09:55:56 (AM) | Display 09:55:56 (AM) | Sys 2026-03-04 09:55:56 (AM) | Temp 64.2 F | RH 64.6%
+I (353639) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (353649) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (353655) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5053 ms
+I (353664) esp_clock: HeapDiag[display_update]: calls=25 net=-816B loss_events=2 gain_events=0 worst_loss=408B
+I (358687) esp_clock: RTC 2026-03-04 09:56:01 (AM) | Display 09:56:01 (AM) | Sys 2026-03-04 09:56:01 (AM) | Temp 64.2 F | RH 64.7%
+I (358689) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (358698) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (358704) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5050 ms
+I (363723) esp_clock: RTC 2026-03-04 09:56:06 (AM) | Display 09:56:06 (AM) | Sys 2026-03-04 09:56:06 (AM) | Temp 64.2 F | RH 64.7%
+I (363724) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (363734) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (363740) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5035 ms
+I (363749) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (363758) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (368781) esp_clock: RTC 2026-03-04 09:56:11 (AM) | Display 09:56:11 (AM) | Sys 2026-03-04 09:56:11 (AM) | Temp 64.2 F | RH 64.8%
+I (368782) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (368792) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (368798) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (373822) esp_clock: RTC 2026-03-04 09:56:16 (AM) | Display 09:56:16 (AM) | Sys 2026-03-04 09:56:16 (AM) | Temp 64.1 F | RH 65.0%
+I (373823) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (373832) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (373839) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5042 ms
+I (373847) esp_clock: HeapDiag[display_update]: calls=25 net=-408B loss_events=1 gain_events=0 worst_loss=408B
+I (378865) esp_clock: RTC 2026-03-04 09:56:21 (AM) | Display 09:56:21 (AM) | Sys 2026-03-04 09:56:21 (AM) | Temp 64.1 F | RH 65.0%
+I (378865) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (378875) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (378882) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5042 ms
+I (378890) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (378899) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (383921) esp_clock: RTC 2026-03-04 09:56:26 (AM) | Display 09:56:26 (AM) | Sys 2026-03-04 09:56:26 (AM) | Temp 64.1 F | RH 65.1%
+I (383922) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (383932) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (383938) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5056 ms
+I (388959) esp_clock: RTC 2026-03-04 09:56:31 (AM) | Display 09:56:31 (AM) | Sys 2026-03-04 09:56:31 (AM) | Temp 64.1 F | RH 65.1%
+I (388960) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (388969) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (388976) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (393994) esp_clock: RTC 2026-03-04 09:56:36 (AM) | Display 09:56:36 (AM) | Sys 2026-03-04 09:56:36 (AM) | Temp 64.1 F | RH 65.1%
+I (393995) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (394005) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (394011) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5035 ms
+I (394020) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (394029) esp_clock: HeapDiag[display_update]: calls=25 net=+156B loss_events=1 gain_events=1 worst_loss=252B
+I (399051) esp_clock: RTC 2026-03-04 09:56:41 (AM) | Display 09:56:41 (AM) | Sys 2026-03-04 09:56:41 (AM) | Temp 64.0 F | RH 65.1%
+I (399052) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (399062) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (399068) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5057 ms
+I (404088) esp_clock: RTC 2026-03-04 09:56:46 (AM) | Display 09:56:46 (AM) | Sys 2026-03-04 09:56:46 (AM) | Temp 64.0 F | RH 65.1%
+I (404089) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (404099) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (404105) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5037 ms
+I (409123) esp_clock: RTC 2026-03-04 09:56:51 (AM) | Display 09:56:51 (AM) | Sys 2026-03-04 09:56:51 (AM) | Temp 64.0 F | RH 65.1%
+I (409124) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (409134) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (409140) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5035 ms
+I (409148) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (409157) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (414180) esp_clock: RTC 2026-03-04 09:56:56 (AM) | Display 09:56:56 (AM) | Sys 2026-03-04 09:56:56 (AM) | Temp 64.0 F | RH 65.2%
+I (414181) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (414190) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (414197) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5057 ms
+I (419218) esp_clock: RTC 2026-03-04 09:57:01 (AM) | Display 09:57:01 (AM) | Sys 2026-03-04 09:57:01 (AM) | Temp 63.9 F | RH 65.2%
+I (419219) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (419229) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (419235) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (424251) esp_clock: RTC 2026-03-04 09:57:06 (AM) | Display 09:57:06 (AM) | Sys 2026-03-04 09:57:06 (AM) | Temp 63.9 F | RH 65.3%
+I (424252) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (424262) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (424268) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5033 ms
+I (424276) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (424286) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (429311) esp_clock: RTC 2026-03-04 09:57:11 (AM) | Display 09:57:11 (AM) | Sys 2026-03-04 09:57:11 (AM) | Temp 63.9 F | RH 65.3%
+I (429312) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (429322) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (429328) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5060 ms
+I (434350) esp_clock: RTC 2026-03-04 09:57:16 (AM) | Display 09:57:16 (AM) | Sys 2026-03-04 09:57:16 (AM) | Temp 63.9 F | RH 65.4%
+I (434351) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (434360) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (434367) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5037 ms
+I (434375) esp_clock: HeapDiag[status_log]: calls=1 net=+764B loss_events=0 gain_events=1 worst_loss=0B
+I (439393) esp_clock: RTC 2026-03-04 09:57:21 (AM) | Display 09:57:21 (AM) | Sys 2026-03-04 09:57:21 (AM) | Temp 63.9 F | RH 65.4%
+I (439394) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (439404) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (439410) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5045 ms
+I (439418) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (439427) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (444448) esp_clock: RTC 2026-03-04 09:57:27 (AM) | Display 09:57:27 (AM) | Sys 2026-03-04 09:57:27 (AM) | Temp 63.8 F | RH 65.5%
+I (444449) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (444459) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (444465) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5055 ms
+I (449486) esp_clock: RTC 2026-03-04 09:57:32 (AM) | Display 09:57:32 (AM) | Sys 2026-03-04 09:57:32 (AM) | Temp 63.8 F | RH 65.6%
+I (449487) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (449497) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (449503) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (454520) esp_clock: RTC 2026-03-04 09:57:37 (AM) | Display 09:57:37 (AM) | Sys 2026-03-04 09:57:37 (AM) | Temp 63.8 F | RH 65.6%
+I (454521) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (454530) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (454537) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (454545) esp_clock: HeapDiag[display_update]: calls=25 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (459568) esp_clock: RTC 2026-03-04 09:57:42 (AM) | Display 09:57:42 (AM) | Sys 2026-03-04 09:57:42 (AM) | Temp 63.8 F | RH 65.7%
+I (459569) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (459579) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (459585) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5048 ms
+I (464606) esp_clock: RTC 2026-03-04 09:57:47 (AM) | Display 09:57:47 (AM) | Sys 2026-03-04 09:57:47 (AM) | Temp 63.8 F | RH 65.8%
+I (464607) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (464617) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (464623) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (469643) esp_clock: RTC 2026-03-04 09:57:52 (AM) | Display 09:57:52 (AM) | Sys 2026-03-04 09:57:52 (AM) | Temp 63.8 F | RH 65.8%
+I (469644) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (469653) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (469659) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5037 ms
+I (469668) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (469677) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (474700) esp_clock: RTC 2026-03-04 09:57:57 (AM) | Display 09:57:57 (AM) | Sys 2026-03-04 09:57:57 (AM) | Temp 63.7 F | RH 65.8%
+I (474701) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (474710) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (474717) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5057 ms
+I (479739) esp_clock: RTC 2026-03-04 09:58:02 (AM) | Display 09:58:02 (AM) | Sys 2026-03-04 09:58:02 (AM) | Temp 63.7 F | RH 65.8%
+I (479740) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (479749) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (479756) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5039 ms
+I (484773) esp_clock: RTC 2026-03-04 09:58:07 (AM) | Display 09:58:07 (AM) | Sys 2026-03-04 09:58:07 (AM) | Temp 63.7 F | RH 65.8%
+I (484774) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (484784) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (484790) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (484799) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (484808) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (489831) esp_clock: RTC 2026-03-04 09:58:12 (AM) | Display 09:58:12 (AM) | Sys 2026-03-04 09:58:12 (AM) | Temp 63.7 F | RH 65.9%
+I (489832) esp_clock: Last NTP compare 0.00 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (489842) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (489848) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (494868) esp_clock: RTC 2026-03-04 09:58:17 (AM) | Display 09:58:17 (AM) | Sys 2026-03-04 09:58:17 (AM) | Temp 63.7 F | RH 65.9%
+I (494869) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (494879) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (494885) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5037 ms
+I (499903) esp_clock: RTC 2026-03-04 09:58:22 (AM) | Display 09:58:22 (AM) | Sys 2026-03-04 09:58:22 (AM) | Temp 63.6 F | RH 66.0%
+I (499904) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (499914) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (499920) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5035 ms
+I (499929) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (499938) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (504959) esp_clock: RTC 2026-03-04 09:58:27 (AM) | Display 09:58:27 (AM) | Sys 2026-03-04 09:58:27 (AM) | Temp 63.6 F | RH 66.0%
+I (504960) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (504970) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (504976) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5056 ms
+I (509998) esp_clock: RTC 2026-03-04 09:58:32 (AM) | Display 09:58:32 (AM) | Sys 2026-03-04 09:58:32 (AM) | Temp 63.6 F | RH 66.0%
+I (509999) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (510009) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (510015) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5039 ms
+I (510023) esp_clock: HeapDiag[display_update]: calls=25 net=-408B loss_events=1 gain_events=0 worst_loss=408B
+I (515043) esp_clock: RTC 2026-03-04 09:58:37 (AM) | Display 09:58:37 (AM) | Sys 2026-03-04 09:58:37 (AM) | Temp 63.6 F | RH 66.0%
+I (515044) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (515054) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (515060) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5045 ms
+I (515068) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (515077) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (520098) esp_clock: RTC 2026-03-04 09:58:42 (AM) | Display 09:58:42 (AM) | Sys 2026-03-04 09:58:42 (AM) | Temp 63.6 F | RH 66.1%
+I (520099) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (520109) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (520115) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5055 ms
+I (525138) esp_clock: RTC 2026-03-04 09:58:47 (AM) | Display 09:58:47 (AM) | Sys 2026-03-04 09:58:47 (AM) | Temp 63.5 F | RH 66.1%
+I (525139) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (525149) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (525155) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5040 ms
+I (525163) esp_clock: HeapDiag[display_update]: calls=25 net=-132B loss_events=1 gain_events=0 worst_loss=132B
+I (530183) esp_clock: RTC 2026-03-04 09:58:52 (AM) | Display 09:58:52 (AM) | Sys 2026-03-04 09:58:52 (AM) | Temp 63.5 F | RH 66.2%
+I (530184) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (530194) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (530200) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5045 ms
+I (530209) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (530218) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (535240) esp_clock: RTC 2026-03-04 09:58:57 (AM) | Display 09:58:57 (AM) | Sys 2026-03-04 09:58:57 (AM) | Temp 63.5 F | RH 66.2%
+I (535241) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (535251) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (535257) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5057 ms
+I (540278) esp_clock: RTC 2026-03-04 09:59:02 (AM) | Display 09:59:02 (AM) | Sys 2026-03-04 09:59:02 (AM) | Temp 63.5 F | RH 66.3%
+I (540279) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (540289) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (540295) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (545313) esp_clock: RTC 2026-03-04 09:59:07 (AM) | Display 09:59:07 (AM) | Sys 2026-03-04 09:59:07 (AM) | Temp 63.5 F | RH 66.4%
+I (545314) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (545324) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (545330) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5035 ms
+I (545338) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (545347) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (550368) esp_clock: RTC 2026-03-04 09:59:12 (AM) | Display 09:59:12 (AM) | Sys 2026-03-04 09:59:12 (AM) | Temp 63.5 F | RH 66.4%
+I (550369) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (550379) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (550385) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5055 ms
+I (555406) esp_clock: RTC 2026-03-04 09:59:17 (AM) | Display 09:59:17 (AM) | Sys 2026-03-04 09:59:18 (AM) | Temp 63.5 F | RH 66.5%
+I (555407) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (555417) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (555423) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (560440) esp_clock: RTC 2026-03-04 09:59:23 (AM) | Display 09:59:23 (AM) | Sys 2026-03-04 09:59:23 (AM) | Temp 63.5 F | RH 66.7%
+I (560440) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (560450) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (560457) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (560465) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (560474) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (565498) esp_clock: RTC 2026-03-04 09:59:28 (AM) | Display 09:59:28 (AM) | Sys 2026-03-04 09:59:28 (AM) | Temp 63.4 F | RH 66.9%
+I (565499) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (565509) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (565515) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (570536) esp_clock: RTC 2026-03-04 09:59:33 (AM) | Display 09:59:33 (AM) | Sys 2026-03-04 09:59:33 (AM) | Temp 63.4 F | RH 66.9%
+I (570537) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (570547) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (570553) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (575570) esp_clock: RTC 2026-03-04 09:59:38 (AM) | Display 09:59:38 (AM) | Sys 2026-03-04 09:59:38 (AM) | Temp 63.4 F | RH 66.9%
+I (575571) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (575580) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (575587) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (575595) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (575605) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (580627) esp_clock: RTC 2026-03-04 09:59:43 (AM) | Display 09:59:43 (AM) | Sys 2026-03-04 09:59:43 (AM) | Temp 63.4 F | RH 66.9%
+I (580628) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (580638) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (580644) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (585666) esp_clock: RTC 2026-03-04 09:59:48 (AM) | Display 09:59:48 (AM) | Sys 2026-03-04 09:59:48 (AM) | Temp 63.4 F | RH 67.0%
+I (585667) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (585677) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (585683) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (590703) esp_clock: RTC 2026-03-04 09:59:53 (AM) | Display 09:59:53 (AM) | Sys 2026-03-04 09:59:53 (AM) | Temp 63.4 F | RH 67.0%
+I (590704) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (590714) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (590720) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5037 ms
+I (590729) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (590738) esp_clock: HeapDiag[display_update]: calls=25 net=-1788B loss_events=2 gain_events=0 worst_loss=1536B
+I (595763) esp_clock: RTC 2026-03-04 09:59:58 (AM) | Display 09:59:58 (AM) | Sys 2026-03-04 09:59:58 (AM) | Temp 63.3 F | RH 67.0%
+I (595764) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (595774) esp_clock: Health: free_heap=197232B sensor_stack_hwm=5564B
+I (595780) esp_clock: HeapDiag: free=197232B (+0) largest=176128B (+0) min=187508B window=5060 ms
+I (600807) esp_clock: RTC 2026-03-04 10:00:03 (AM) | Display 10:00:03 (AM) | Sys 2026-03-04 10:00:03 (AM) | Temp 63.3 F | RH 67.1%
+I (600808) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (600818) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (600824) esp_clock: HeapDiag: free=197100B (-132) largest=176128B (+0) min=187508B window=5045 ms
+I (600833) esp_clock: HeapDiag[bsec_state_save]: calls=25 net=-132B loss_events=1 gain_events=0 worst_loss=132B
+I (605850) esp_clock: RTC 2026-03-04 10:00:08 (AM) | Display 10:00:08 (AM) | Sys 2026-03-04 10:00:08 (AM) | Temp 63.3 F | RH 67.1%
+I (605851) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (605860) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (605867) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5042 ms
+I (605875) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (605885) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (610908) esp_clock: RTC 2026-03-04 10:00:13 (AM) | Display 10:00:13 (AM) | Sys 2026-03-04 10:00:13 (AM) | Temp 63.3 F | RH 67.1%
+I (610909) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (610919) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (610925) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (615951) esp_clock: RTC 2026-03-04 10:00:18 (AM) | Display 10:00:18 (AM) | Sys 2026-03-04 10:00:18 (AM) | Temp 63.3 F | RH 67.2%
+I (615952) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (615962) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (615968) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5043 ms
+I (620985) esp_clock: RTC 2026-03-04 10:00:23 (AM) | Display 10:00:23 (AM) | Sys 2026-03-04 10:00:23 (AM) | Temp 63.3 F | RH 67.1%
+I (620986) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (620995) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (621002) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (621010) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (621020) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (626043) esp_clock: RTC 2026-03-04 10:00:28 (AM) | Display 10:00:28 (AM) | Sys 2026-03-04 10:00:28 (AM) | Temp 63.3 F | RH 67.2%
+I (626044) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (626054) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (626060) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (631082) esp_clock: RTC 2026-03-04 10:00:33 (AM) | Display 10:00:33 (AM) | Sys 2026-03-04 10:00:33 (AM) | Temp 63.3 F | RH 67.2%
+I (631083) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (631093) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (631099) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5040 ms
+I (636115) esp_clock: RTC 2026-03-04 10:00:38 (AM) | Display 10:00:38 (AM) | Sys 2026-03-04 10:00:38 (AM) | Temp 63.2 F | RH 67.2%
+I (636115) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (636125) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (636132) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5032 ms
+I (636140) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (636149) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (641173) esp_clock: RTC 2026-03-04 10:00:43 (AM) | Display 10:00:43 (AM) | Sys 2026-03-04 10:00:43 (AM) | Temp 63.2 F | RH 67.3%
+I (641174) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (641184) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (641190) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5058 ms
+I (646211) esp_clock: RTC 2026-03-04 10:00:48 (AM) | Display 10:00:48 (AM) | Sys 2026-03-04 10:00:48 (AM) | Temp 63.2 F | RH 67.3%
+I (646212) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (646222) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (646228) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (651246) esp_clock: RTC 2026-03-04 10:00:53 (AM) | Display 10:00:53 (AM) | Sys 2026-03-04 10:00:53 (AM) | Temp 63.2 F | RH 67.3%
+I (651247) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (651257) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (651263) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5035 ms
+I (651271) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (651281) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (656303) esp_clock: RTC 2026-03-04 10:00:58 (AM) | Display 10:00:58 (AM) | Sys 2026-03-04 10:00:58 (AM) | Temp 63.2 F | RH 67.3%
+I (656304) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (656314) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (656320) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5057 ms
+I (661341) esp_clock: RTC 2026-03-04 10:01:03 (AM) | Display 10:01:03 (AM) | Sys 2026-03-04 10:01:03 (AM) | Temp 63.2 F | RH 67.3%
+I (661342) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (661352) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (661358) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (661366) esp_clock: HeapDiag[display_update]: calls=25 net=+208B loss_events=0 gain_events=1 worst_loss=0B
+I (666385) esp_clock: RTC 2026-03-04 10:01:08 (AM) | Display 10:01:08 (AM) | Sys 2026-03-04 10:01:08 (AM) | Temp 63.2 F | RH 67.3%
+I (666385) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (666395) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (666402) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5044 ms
+I (666410) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (666419) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (671440) esp_clock: RTC 2026-03-04 10:01:14 (AM) | Display 10:01:14 (AM) | Sys 2026-03-04 10:01:14 (AM) | Temp 63.2 F | RH 67.5%
+I (671441) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (671450) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (671457) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5055 ms
+E (671505) chip[DL]: SRP update error: timed out waiting on server response
+I (676476) esp_clock: RTC 2026-03-04 10:01:19 (AM) | Display 10:01:19 (AM) | Sys 2026-03-04 10:01:19 (AM) | Temp 63.2 F | RH 67.5%
+I (676477) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (676487) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (676493) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5036 ms
+I (681510) esp_clock: RTC 2026-03-04 10:01:24 (AM) | Display 10:01:24 (AM) | Sys 2026-03-04 10:01:24 (AM) | Temp 63.1 F | RH 67.6%
+I (681511) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (681520) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (681527) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5034 ms
+I (681535) esp_clock: HeapDiag[als_update]: calls=8 net=-1536B loss_events=1 gain_events=0 worst_loss=1536B
+I (681545) esp_clock: HeapDiag[display_update]: calls=25 net=-252B loss_events=1 gain_events=0 worst_loss=252B
+I (686565) esp_clock: RTC 2026-03-04 10:01:29 (AM) | Display 10:01:29 (AM) | Sys 2026-03-04 10:01:29 (AM) | Temp 63.1 F | RH 67.5%
+I (686566) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (686575) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (686582) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5055 ms
+I (691603) esp_clock: RTC 2026-03-04 10:01:34 (AM) | Display 10:01:34 (AM) | Sys 2026-03-04 10:01:34 (AM) | Temp 63.1 F | RH 67.6%
+I (691604) esp_clock: Last NTP compare 0.01 days ago (2026-03-04 09:51:05) | Drift 3.466 sec (RTC behind NTP)
+I (691614) esp_clock: Health: free_heap=197100B sensor_stack_hwm=5564B
+I (691620) esp_clock: HeapDiag: free=197100B (+0) largest=176128B (+0) min=187508B window=5038 ms
+I (691629) esp_clock: HeapDiag[display_update]: calls=25 net=+200B loss_events=0 gain_events=1 worst_loss=0B
