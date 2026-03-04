@@ -10,7 +10,7 @@
 // Set to 1 to completely disable Matter/network time sync.
 // When disabled, the external DS3231 remains the only authority.
 #if !defined(DISABLE_TIME_SYNC)
-#define DISABLE_TIME_SYNC 1
+#define DISABLE_TIME_SYNC 0
 #endif
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
@@ -19,9 +19,11 @@
 #include "esp_system.h"
 #include "esp_netif.h"
 #include "esp_netif_ip_addr.h"
+#include "esp_netif_sntp.h"
 #include "esp_heap_caps.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "driver/spi_master.h"
@@ -86,12 +88,17 @@ static constexpr float TEMP_OFFSET_C = 4.1f;
 static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
-static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 30UL * 24UL * 60UL * 60UL * 1000UL;
+static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 7UL * 24UL * 60UL * 60UL * 1000UL;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 // Set to false if RTC stores local time instead of UTC.
 static constexpr bool RTC_STORES_UTC = true;
 static constexpr time_t RTC_MAX_DRIFT_SEC = 2;
 static constexpr uint32_t RTC_SYNC_GRACE_MS = 60UL * 1000UL;
+static constexpr const char* NTP_TEST_SERVER_IPV4 = "192.168.1.29";
+static constexpr const char* NTP_TEST_SERVER_IPV6 = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static constexpr uint16_t NTP_TEST_PORT = 123;
+static constexpr uint32_t NTP_TEST_TIMEOUT_MS = 20000;
+static constexpr time_t NTP_TEST_DRIFT_THRESHOLD_SEC = RTC_MAX_DRIFT_SEC;
 static constexpr char DIAG_NS[] = "diag";
 static constexpr char DIAG_KEY_BOOT_COUNT[] = "boot_count";
 static constexpr char DIAG_KEY_LAST_RESET[] = "last_reset";
@@ -135,16 +142,16 @@ volatile float vCO2eq = NAN;
 volatile uint8_t vIAQacc = 0;
 static volatile bool gBrightnessOverride = false;
 static TaskHandle_t gRtcSyncTask = nullptr;
+static SemaphoreHandle_t gRtcSyncMutex = nullptr;
 static volatile bool gLogInfoPinned = false;
 static volatile bool gThreadAttached = false;
 static volatile bool gCommissioned = false;
 static volatile bool gRtcInitialSyncDone = false;
 static volatile bool gRtcInitialSyncDue = false;
 static volatile uint32_t gRtcSyncIntervalMs = RTC_SYNC_INTERVAL_MS;
-// Indicates whether network time is considered valid. This flag is set when the
-// Matter time sync subsystem reports that a valid UTC time is available via
-// onTimeSyncReady(). Until this becomes true, the RTC sync task will not
-// overwrite the external RTC.
+// Indicates whether network time is currently considered valid based on recent
+// NTP fetch results. Auto RTC writes are attempted only through the guarded
+// NTP sync pipeline.
 static volatile bool gNetTimeValid = false;
 static uint32_t gBootCount = 0;
 static esp_reset_reason_t gPrevResetReason = ESP_RST_UNKNOWN;
@@ -324,6 +331,14 @@ static i2c_master_bus_handle_t i2cBus = nullptr;
 static i2c_master_dev_handle_t bmeDev = nullptr;
 static i2c_master_dev_handle_t rtcDev = nullptr;
 static i2c_master_dev_handle_t vemlDev = nullptr;
+static bool gHasBme680 = false;
+static bool gHasRtc = false;
+static bool gHasVeml7700 = false;
+
+static bool i2c_probe_addr(uint8_t addr) {
+  if (!i2cBus) return false;
+  return i2c_master_probe(i2cBus, addr, 50) == ESP_OK;
+}
 
 static int8_t i2c_read_bytes(uint8_t reg, uint8_t* data, uint32_t len, void*) {
   if (!bmeDev) return -1;
@@ -518,18 +533,7 @@ static void schedule_initial_rtc_sync(const char* reason);
 static void ensure_thread_default_netif(const char* reason);
 static bool is_commissioned();
 static void onTimeSyncReady(int64_t utc) {
-  ESP_LOGI(TAG, "Matter time sync ready");
-  time_t floor = min_valid_epoch();
-  if (utc >= (int64_t)floor) {
-    gNetTimeValid = true;
-    if (gCommissioned || is_commissioned()) {
-      schedule_initial_rtc_sync("time-sync-ready");
-    } else {
-      ESP_LOGI(TAG, "Matter time valid, awaiting commissioning before RTC correction");
-    }
-  } else {
-    ESP_LOGW(TAG, "Ignoring Matter time epoch %" PRId64 " (< validity floor %ld)", utc, (long)floor);
-  }
+  ESP_LOGI(TAG, "Matter time sync ready (epoch=%" PRId64 ")", utc);
 }
 
 static uint8_t co2_to_air_quality_enum(float co2ppm) {
@@ -1147,61 +1151,220 @@ static void set_system_time_from_rtc() {
   set_system_time_from_epoch(rtc_epoch);
 }
 
-static void log_sync_snapshot(const char* label, time_t net_epoch, time_t rtc_epoch) {
-  struct tm net_tm = {};
-  struct tm rtc_tm = {};
-  localtime_r(&net_epoch, &net_tm);
-  localtime_r(&rtc_epoch, &rtc_tm);
-  ESP_LOGI(TAG,
-           "RTC sync %s | Net %02d:%02d:%02d | RTC %02d:%02d:%02d | Display %02d:%02d:%02d",
-           label,
-           net_tm.tm_hour, net_tm.tm_min, net_tm.tm_sec,
-           rtc_tm.tm_hour, rtc_tm.tm_min, rtc_tm.tm_sec,
-           rtc_tm.tm_hour, rtc_tm.tm_min, rtc_tm.tm_sec);
+typedef struct {
+  const char* source;
+  int64_t ntp_epoch;
+  int64_t ntp_usec;
+  int64_t rtc_epoch_before;
+  int64_t rtc_epoch_after;
+  double drift_before_sec;
+  double drift_after_sec;
+  bool fetched;
+  bool rtc_before_valid;
+  bool rtc_after_valid;
+  bool rtc_written;
+  bool rtc_write_ok;
+} NtpRtcTestResult;
+
+static void formatEpochLocal(int64_t epoch, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  if (epoch <= 0) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  time_t t = (time_t)epoch;
+  struct tm tmLocal = {};
+  localtime_r(&t, &tmLocal);
+  snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d",
+           tmLocal.tm_year + 1900, tmLocal.tm_mon + 1, tmLocal.tm_mday,
+           tmLocal.tm_hour, tmLocal.tm_min, tmLocal.tm_sec);
 }
 
-static bool sync_rtc_from_epoch(time_t now, const char* source) {
-  if (now < min_valid_epoch()) return false;
-  time_t rtc_epoch = 0;
-  if (!rtc_read_epoch(&rtc_epoch)) {
-    log_sync_snapshot("before (rtc unreadable)", now, now);
-    ESP_LOGW(TAG, "RTC WRITE: %s (rtc unreadable) -> epoch %ld", source, (long)now);
-    bool ok = rtc_set_time_from_epoch(now);
-    ESP_LOGI(TAG, "RTC sync from %s: %s (rtc unreadable)", source, ok ? "OK" : "FAILED");
-    if (ok) {
-      time_t rtc_after = 0;
-      if (rtc_read_epoch(&rtc_after)) log_sync_snapshot("after", now, rtc_after);
+static bool ntp_fetch_one_shot(const char* server, uint32_t timeoutMs, struct timeval* outTv, const char* prefix) {
+  if (!server || !outTv) return false;
+  if (!prefix) prefix = "NTP test";
+  *outTv = {};
+
+  ESP_LOGI(TAG, "%s: starting one-shot fetch server=%s port=%u timeout=%lu ms",
+           prefix,
+           server, (unsigned)NTP_TEST_PORT, (unsigned long)timeoutMs);
+  ensure_thread_default_netif("ntp-test");
+
+  esp_netif_sntp_deinit();
+  esp_sntp_config_t cfg = ESP_NETIF_SNTP_DEFAULT_CONFIG(server);
+  cfg.start = true;
+  cfg.server_from_dhcp = false;
+  cfg.renew_servers_after_new_IP = false;
+
+  const uint64_t t0 = esp_timer_get_time();
+  esp_err_t initErr = esp_netif_sntp_init(&cfg);
+  if (initErr != ESP_OK) {
+    ESP_LOGW(TAG, "%s: init failed server=%s err=%s", prefix, server, esp_err_to_name(initErr));
+    esp_netif_sntp_deinit();
+    return false;
+  }
+
+  esp_err_t waitErr = esp_netif_sntp_sync_wait(pdMS_TO_TICKS(timeoutMs));
+  if (waitErr != ESP_OK) {
+    const uint64_t elapsed = (esp_timer_get_time() - t0) / 1000ULL;
+    ESP_LOGW(TAG, "%s: fetch failed server=%s err=%s elapsed=%llu ms",
+             prefix,
+             server, esp_err_to_name(waitErr), (unsigned long long)elapsed);
+    esp_netif_sntp_deinit();
+    return false;
+  }
+
+  gettimeofday(outTv, nullptr);
+  const uint64_t elapsed = (esp_timer_get_time() - t0) / 1000ULL;
+  ESP_LOGI(TAG, "%s: fetch success server=%s epoch=%" PRId64 ".%06ld elapsed=%llu ms",
+           prefix,
+           server, (int64_t)outTv->tv_sec, (long)outTv->tv_usec, (unsigned long long)elapsed);
+  esp_netif_sntp_deinit();
+  return true;
+}
+
+static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char* prefix, bool verboseLogs) {
+  if (!reason) reason = "unspecified";
+  if (!prefix) prefix = "RTC sync";
+  if (gRtcSyncMutex) {
+    if (xSemaphoreTake(gRtcSyncMutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+      ESP_LOGW(TAG, "%s: busy, skipping (reason=%s)", prefix, reason);
+      return false;
     }
-    return ok;
   }
-  log_sync_snapshot("before", now, rtc_epoch);
-  int64_t drift = llabs((int64_t)now - (int64_t)rtc_epoch);
-  if (drift <= RTC_MAX_DRIFT_SEC) {
-    ESP_LOGI(TAG, "RTC drift %" PRId64 "s <= %lds; no sync", drift, (long)RTC_MAX_DRIFT_SEC);
-    log_sync_snapshot("after (no sync)", now, rtc_epoch);
-    return true;
-  }
-  ESP_LOGW(TAG, "RTC WRITE: %s (drift %" PRId64 "s) -> epoch %ld", source, drift, (long)now);
-  bool ok = rtc_set_time_from_epoch(now);
-  ESP_LOGI(TAG, "RTC sync from %s: %s (drift %" PRId64 "s)", source, ok ? "OK" : "FAILED", drift);
-  if (ok) {
-    time_t rtc_after = 0;
-    if (rtc_read_epoch(&rtc_after)) log_sync_snapshot("after", now, rtc_after);
-  }
+
+  bool ok = false;
+  do {
+    if (verboseLogs) {
+      ESP_LOGI(TAG, "%s: stage 1/4 start mode=%s timeout=%lu ms reason=%s",
+               prefix, allowWrite ? "compare+sync" : "compare-only",
+               (unsigned long)NTP_TEST_TIMEOUT_MS, reason);
+    } else {
+      ESP_LOGI(TAG, "%s: start mode=%s reason=%s",
+               prefix, allowWrite ? "compare+sync" : "compare-only", reason);
+    }
+
+    NtpRtcTestResult r = {};
+    r.source = "none";
+
+    time_t rtcBefore = 0;
+    r.rtc_before_valid = rtc_read_epoch(&rtcBefore);
+    if (r.rtc_before_valid) {
+      r.rtc_epoch_before = (int64_t)rtcBefore;
+      if (verboseLogs) {
+        char rtcLocal[32] = {};
+        formatEpochLocal(r.rtc_epoch_before, rtcLocal, sizeof(rtcLocal));
+        ESP_LOGI(TAG, "%s: stage 2/4 RTC precheck epoch=%" PRId64 " local=%s",
+                 prefix, r.rtc_epoch_before, rtcLocal);
+      }
+    } else {
+      ESP_LOGW(TAG, "%s: RTC precheck failed (unreadable)", prefix);
+    }
+
+    struct timeval tv = {};
+    const char* servers[] = {NTP_TEST_SERVER_IPV6, NTP_TEST_SERVER_IPV4};
+    for (size_t i = 0; i < (sizeof(servers) / sizeof(servers[0])); ++i) {
+      if (verboseLogs) {
+        ESP_LOGI(TAG, "%s: stage 3/4 attempt %u/%u server=%s",
+                 prefix, (unsigned)(i + 1), (unsigned)(sizeof(servers) / sizeof(servers[0])), servers[i]);
+      }
+      if (ntp_fetch_one_shot(servers[i], NTP_TEST_TIMEOUT_MS, &tv, prefix)) {
+        r.fetched = true;
+        r.source = servers[i];
+        r.ntp_epoch = (int64_t)tv.tv_sec;
+        r.ntp_usec = (int64_t)tv.tv_usec;
+        break;
+      }
+    }
+
+    if (!r.fetched) {
+      gNetTimeValid = false;
+      ESP_LOGW(TAG, "%s: FAILURE no server returned time (reason=%s)", prefix, reason);
+      break;
+    }
+    gNetTimeValid = true;
+
+    if (r.rtc_before_valid) {
+      const int64_t ntpUs = r.ntp_epoch * 1000000LL + r.ntp_usec;
+      const int64_t rtcUs = r.rtc_epoch_before * 1000000LL;
+      r.drift_before_sec = (double)(ntpUs - rtcUs) / 1000000.0;
+      ESP_LOGI(TAG,
+               "NTP_TEST_RESULT reason=%s source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+               " rtc_epoch_before=%" PRId64 " drift_before_sec=%.4f",
+               reason, r.source, r.ntp_epoch, r.ntp_usec, r.rtc_epoch_before, r.drift_before_sec);
+      ESP_LOGI(TAG, "%s: RTC is %.3f seconds %s NTP",
+               prefix, fabs(r.drift_before_sec), (r.drift_before_sec >= 0.0) ? "behind" : "ahead of");
+    } else {
+      ESP_LOGI(TAG,
+               "NTP_TEST_RESULT reason=%s source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+               " rtc_epoch_before=unknown drift_before_sec=nan",
+               reason, r.source, r.ntp_epoch, r.ntp_usec);
+      ESP_LOGI(TAG, "%s: RTC comparison skipped (RTC unreadable)", prefix);
+    }
+
+    if (!allowWrite) {
+      ESP_LOGI(TAG, "%s: SUCCESS compare-only complete (reason=%s)", prefix, reason);
+      ok = true;
+      break;
+    }
+
+    bool needsWrite = !r.rtc_before_valid;
+    if (r.rtc_before_valid) {
+      needsWrite = fabs(r.drift_before_sec) > (double)NTP_TEST_DRIFT_THRESHOLD_SEC;
+    }
+    if (!needsWrite) {
+      ESP_LOGI(TAG, "%s: RTC drift <= %ld sec, no write needed (reason=%s)",
+               prefix, (long)NTP_TEST_DRIFT_THRESHOLD_SEC, reason);
+    } else {
+      ESP_LOGI(TAG, "%s: syncing RTC to NTP time... (reason=%s)", prefix, reason);
+      r.rtc_written = true;
+      r.rtc_write_ok = rtc_set_time_from_epoch((time_t)r.ntp_epoch);
+      ESP_LOGI(TAG, "%s: RTC sync %s", prefix, r.rtc_write_ok ? "SUCCEEDED" : "FAILED");
+      if (!r.rtc_write_ok) {
+        ESP_LOGW(TAG, "%s: FAILURE RTC write failed (reason=%s)", prefix, reason);
+        break;
+      }
+    }
+
+    time_t rtcAfter = 0;
+    r.rtc_after_valid = rtc_read_epoch(&rtcAfter);
+    if (r.rtc_after_valid) {
+      r.rtc_epoch_after = (int64_t)rtcAfter;
+      const int64_t ntpUs = r.ntp_epoch * 1000000LL + r.ntp_usec;
+      const int64_t rtcUsAfter = r.rtc_epoch_after * 1000000LL;
+      r.drift_after_sec = (double)(ntpUs - rtcUsAfter) / 1000000.0;
+      ESP_LOGI(TAG,
+               "NTP_TEST_POSTSYNC reason=%s ntp_epoch=%" PRId64 " rtc_epoch_after=%" PRId64
+               " drift_after_sec=%.4f",
+               reason, r.ntp_epoch, r.rtc_epoch_after, r.drift_after_sec);
+      ESP_LOGI(TAG, "%s: post-sync RTC is %.3f seconds %s NTP",
+               prefix, fabs(r.drift_after_sec), (r.drift_after_sec >= 0.0) ? "behind" : "ahead of");
+      ESP_LOGI(TAG, "%s: SUCCESS compare+sync complete (reason=%s)", prefix, reason);
+      ok = true;
+      break;
+    }
+
+    ESP_LOGW(TAG,
+             "NTP_TEST_POSTSYNC reason=%s ntp_epoch=%" PRId64 " rtc_epoch_after=unknown drift_after_sec=nan",
+             reason, r.ntp_epoch);
+    ESP_LOGW(TAG, "%s: RTC re-read failed after sync attempt (reason=%s)", prefix, reason);
+  } while (false);
+
+  if (gRtcSyncMutex) xSemaphoreGive(gRtcSyncMutex);
   return ok;
+}
+
+static bool run_ntp_rtc_test(bool applyRtcSync) {
+  return run_network_rtc_sync(applyRtcSync,
+                              applyRtcSync ? "serial-ntptest-sync" : "serial-ntptest",
+                              "NTP test",
+                              true);
 }
 
 static void request_rtc_sync(const char* reason) {
   if (!gRtcSyncTask) return;
   ESP_LOGI(TAG, "RTC sync requested (%s)", reason);
   xTaskNotifyGive(gRtcSyncTask);
-}
-
-static void request_rtc_drift_check_now(const char* reason) {
-  // Force the sync task into immediate drift-check path (no grace delay).
-  gRtcInitialSyncDue = false;
-  gRtcInitialSyncDone = true;
-  request_rtc_sync(reason);
 }
 
 static void schedule_initial_rtc_sync(const char* reason) {
@@ -1252,30 +1415,15 @@ static void rtc_time_sync_task(void*) {
       continue;
     }
     if (!gThreadAttached) {
-      ESP_LOGI(TAG, "Thread not attached; checking for cached Matter time only");
-    }
-    // If network time is not yet considered valid, attempt to validate it now.
-    if (!gNetTimeValid) {
-      int64_t utcCheck = 0;
-      if (time_sync_now_utc(&utcCheck) && utcCheck >= (int64_t)min_valid_epoch()) {
-        gNetTimeValid = true;
-        ESP_LOGI(TAG, "Matter network time has become valid; enabling RTC sync");
-        request_rtc_sync("time-sync-valid");
-      }
-    }
-    // Do not sync the RTC until the network time has been reported as valid.
-    // This prevents overwriting the external RTC with non-authoritative time.
-    if (!gNetTimeValid) {
-      ESP_LOGI(TAG, "RTC sync skipped (network time not valid)");
+      ESP_LOGI(TAG, "RTC sync skipped (thread not attached)");
       ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(gRtcSyncIntervalMs));
       continue;
     }
+
     if (gRtcInitialSyncDue && !gRtcInitialSyncDone) {
       ESP_LOGI(TAG, "RTC initial sync: waiting grace period");
       vTaskDelay(pdMS_TO_TICKS(RTC_SYNC_GRACE_MS));
-      int64_t utc = 0;
-      bool ok = time_sync_now_utc(&utc);
-      if (ok) ok = sync_rtc_from_epoch((time_t)utc, "Matter-Time-Sync");
+      bool ok = run_network_rtc_sync(true, "commissioning-auto", "RTC sync", false);
       if (ok) {
         gRtcInitialSyncDone = true;
         gRtcInitialSyncDue = false;
@@ -1285,12 +1433,7 @@ static void rtc_time_sync_task(void*) {
         gRtcInitialSyncDue = false;
       }
     } else {
-      int64_t utc = 0;
-      if (time_sync_now_utc(&utc)) {
-        sync_rtc_from_epoch((time_t)utc, "Matter-Time-Sync");
-      } else {
-        ESP_LOGW(TAG, "Matter time sync unavailable");
-      }
+      run_network_rtc_sync(true, "periodic-weekly", "RTC sync", false);
     }
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(gRtcSyncIntervalMs));
   }
@@ -1506,8 +1649,14 @@ static void handleDisplaySerialCommands() {
             ESP_LOGW(TAG, "RTC read failed");
           }
         } else if (strcmp(buf, "timesync now") == 0) {
-          request_rtc_drift_check_now("serial-timesync-now");
-          ESP_LOGI(TAG, "Time sync: immediate drift check requested");
+          bool ok = run_network_rtc_sync(true, "serial-timesync-now", "RTC sync", true);
+          ESP_LOGI(TAG, "Time sync command result: %s", ok ? "SUCCESS" : "FAILURE");
+        } else if (strcmp(buf, "ntptest sync") == 0) {
+          bool ok = run_ntp_rtc_test(true);
+          ESP_LOGI(TAG, "NTP test command result: %s", ok ? "SUCCESS" : "FAILURE");
+        } else if (strcmp(buf, "ntptest") == 0) {
+          bool ok = run_ntp_rtc_test(false);
+          ESP_LOGI(TAG, "NTP test command result: %s", ok ? "SUCCESS" : "FAILURE");
         } else if (strncmp(buf, "timesync interval", 17) == 0) {
           char* p = buf + 17;
           while (*p == ' ') p++;
@@ -1575,9 +1724,21 @@ static void init_i2c() {
 
   dev_cfg.device_address = VEML7700_ADDR;
   ESP_ERROR_CHECK(i2c_master_bus_add_device(i2cBus, &dev_cfg, &vemlDev));
+
+  gHasBme680 = i2c_probe_addr(BME_ADDR);
+  gHasRtc = i2c_probe_addr(DS3231_ADDR);
+  gHasVeml7700 = i2c_probe_addr(VEML7700_ADDR);
+  ESP_LOGI(TAG, "I2C probe: BME680=%s RTC(DS3231)=%s VEML7700=%s",
+           gHasBme680 ? "present" : "missing",
+           gHasRtc ? "present" : "missing",
+           gHasVeml7700 ? "present" : "missing");
 }
 
 static void init_bsec() {
+  if (!gHasBme680) {
+    ESP_LOGW(TAG, "BME680 not detected; skipping BSEC init");
+    return;
+  }
   env.begin(BME68X_I2C_INTF, i2c_read_bytes, i2c_write_bytes, delay_us, nullptr, millis_ms);
   loadBsecState();
   env.updateSubscription(sensorList, sizeof(sensorList) / sizeof(sensorList[0]), BSEC_SAMPLE_RATE_LP);
@@ -1586,7 +1747,10 @@ static void init_bsec() {
 }
 
 static void init_veml7700() {
-  if (!vemlDev) return;
+  if (!vemlDev || !gHasVeml7700) {
+    ESP_LOGW(TAG, "VEML7700 not detected; ALS auto-brightness disabled");
+    return;
+  }
   // ALS_CONF_0 register (0x00): set to default-ish, power on.
   // 0x0000 is a safe baseline on most boards.
   uint8_t cfg[2] = {0x00, 0x00};
@@ -1621,7 +1785,7 @@ static void sensor_task(void*) {
     #if !DISABLE_TIME_SYNC
       time_sync_poll();
     #endif
-    if (!env.run()) {
+    if (gHasBme680 && !env.run()) {
       ESP_LOGW(TAG, "BSEC run returned false");
     }
     if (!threadConfigured) {
@@ -1644,18 +1808,30 @@ static void sensor_task(void*) {
     if (DISPLAY_RH_TEST_MODE) updateDisplayRhTestPattern();
     else if (DISPLAY_TEST_MODE) updateDisplayTestPattern();
     else updateDisplayFromState();
-    saveBsecStateIfReady(millis_ms());
+    if (gHasBme680) saveBsecStateIfReady(millis_ms());
     handleDisplaySerialCommands();
 
     if (now - lastLogMs > 5000) {
       ClockTime ct = readClockTime();
       int h12 = ct.hour % 12;
       if (h12 == 0) h12 = 12;
+      int year = 0;
+      int mon = 0;
+      int day = 0;
+      time_t rtcEpoch = 0;
+      if (rtc_read_epoch(&rtcEpoch)) {
+        struct tm localTm = {};
+        localtime_r(&rtcEpoch, &localTm);
+        year = localTm.tm_year + 1900;
+        mon = localTm.tm_mon + 1;
+        day = localTm.tm_mday;
+      }
       const UBaseType_t hwmWords = uxTaskGetStackHighWaterMark(nullptr);
       const size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-      ESP_LOGI(TAG, "RTC %02u:%02u:%02u (%s) | Display %02d:%02d:%02u | Temp %.1f F | RH %.1f%%",
+      ESP_LOGI(TAG, "RTC %04d-%02d-%02d %02u:%02u:%02u (%s) | Display %02d:%02d:%02u (%s) | Temp %.1f F | RH %.1f%%",
+               year, mon, day,
                ct.hour, ct.minute, ct.second, ct.pm ? "PM" : "AM",
-               h12, ct.minute, ct.second,
+               h12, ct.minute, ct.second, ct.pm ? "PM" : "AM",
                (double)(vTempC * 9.0f / 5.0f + 32.0f),
                (double)vHum);
       ESP_LOGI(TAG, "Health: free_heap=%uB sensor_stack_hwm=%uB",
@@ -1687,6 +1863,10 @@ extern "C" void app_main() {
     targs.name = "loginfo_timeout";
     esp_timer_create(&targs, &log_timer);
     esp_timer_start_once(log_timer, 720ULL * 1000ULL * 1000ULL);
+  }
+  gRtcSyncMutex = xSemaphoreCreateMutex();
+  if (!gRtcSyncMutex) {
+    ESP_LOGW(TAG, "RTC sync mutex create failed; sync operations may overlap");
   }
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_nvs();
@@ -1748,6 +1928,13 @@ extern "C" void app_main() {
   #endif
   matter_init();
   gCommissioned = is_commissioned();
+#if ESP_CLOCK_HAS_MATTER
+  ESP_LOGI(TAG, "Boot commissioning state: commissioned=%s fabrics=%lu",
+           gCommissioned ? "yes" : "no",
+           (unsigned long)chip::Server::GetInstance().GetFabricTable().FabricCount());
+#else
+  ESP_LOGI(TAG, "Boot commissioning state: Matter disabled");
+#endif
 
   display.init();
 
