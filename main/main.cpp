@@ -1284,21 +1284,32 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     }
     gNetTimeValid = true;
 
+    // Compare like-to-like by sampling RTC near the network-time sample point.
+    struct timeval tvCompare = {};
+    gettimeofday(&tvCompare, nullptr);
+    r.ntp_epoch = (int64_t)tvCompare.tv_sec;
+    r.ntp_usec = (int64_t)tvCompare.tv_usec;
+    const int64_t ntpRounded = r.ntp_epoch + ((r.ntp_usec >= 500000) ? 1 : 0);
+    time_t rtcCompare = 0;
+    r.rtc_before_valid = rtc_read_epoch(&rtcCompare);
     if (r.rtc_before_valid) {
-      const int64_t ntpUs = r.ntp_epoch * 1000000LL + r.ntp_usec;
-      const int64_t rtcUs = r.rtc_epoch_before * 1000000LL;
-      r.drift_before_sec = (double)(ntpUs - rtcUs) / 1000000.0;
+      r.rtc_epoch_before = (int64_t)rtcCompare;
+      r.drift_before_sec = (double)(ntpRounded - r.rtc_epoch_before);
       ESP_LOGI(TAG,
                "NTP_TEST_RESULT reason=%s source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
-               " rtc_epoch_before=%" PRId64 " drift_before_sec=%.4f",
-               reason, r.source, r.ntp_epoch, r.ntp_usec, r.rtc_epoch_before, r.drift_before_sec);
-      ESP_LOGI(TAG, "%s: RTC is %.3f seconds %s NTP",
-               prefix, fabs(r.drift_before_sec), (r.drift_before_sec >= 0.0) ? "behind" : "ahead of");
+               " ntp_rounded=%" PRId64 " rtc_epoch_before=%" PRId64 " drift_before_sec=%.4f",
+               reason, r.source, r.ntp_epoch, r.ntp_usec, ntpRounded, r.rtc_epoch_before, r.drift_before_sec);
+      if (fabs(r.drift_before_sec) < 1.0) {
+        ESP_LOGI(TAG, "%s: RTC is within 1 second variance of NTP", prefix);
+      } else {
+        ESP_LOGI(TAG, "%s: RTC is %.0f seconds %s NTP (rounded second compare)",
+                 prefix, fabs(r.drift_before_sec), (r.drift_before_sec >= 0.0) ? "behind" : "ahead of");
+      }
     } else {
       ESP_LOGI(TAG,
                "NTP_TEST_RESULT reason=%s source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
-               " rtc_epoch_before=unknown drift_before_sec=nan",
-               reason, r.source, r.ntp_epoch, r.ntp_usec);
+               " ntp_rounded=%" PRId64 " rtc_epoch_before=unknown drift_before_sec=nan",
+               reason, r.source, r.ntp_epoch, r.ntp_usec, ntpRounded);
       ESP_LOGI(TAG, "%s: RTC comparison skipped (RTC unreadable)", prefix);
     }
 
@@ -1318,7 +1329,12 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     } else {
       ESP_LOGI(TAG, "%s: syncing RTC to NTP time... (reason=%s)", prefix, reason);
       r.rtc_written = true;
-      r.rtc_write_ok = rtc_set_time_from_epoch((time_t)r.ntp_epoch);
+      struct timeval tvWrite = {};
+      gettimeofday(&tvWrite, nullptr);
+      time_t writeEpoch = tvWrite.tv_sec + ((tvWrite.tv_usec >= 500000) ? 1 : 0);
+      ESP_LOGI(TAG, "%s: RTC write target epoch=%ld (rounded from %ld.%06ld)",
+               prefix, (long)writeEpoch, (long)tvWrite.tv_sec, (long)tvWrite.tv_usec);
+      r.rtc_write_ok = rtc_set_time_from_epoch(writeEpoch);
       ESP_LOGI(TAG, "%s: RTC sync %s", prefix, r.rtc_write_ok ? "SUCCEEDED" : "FAILED");
       if (!r.rtc_write_ok) {
         ESP_LOGW(TAG, "%s: FAILURE RTC write failed (reason=%s)", prefix, reason);
@@ -1330,15 +1346,22 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     r.rtc_after_valid = rtc_read_epoch(&rtcAfter);
     if (r.rtc_after_valid) {
       r.rtc_epoch_after = (int64_t)rtcAfter;
-      const int64_t ntpUs = r.ntp_epoch * 1000000LL + r.ntp_usec;
-      const int64_t rtcUsAfter = r.rtc_epoch_after * 1000000LL;
-      r.drift_after_sec = (double)(ntpUs - rtcUsAfter) / 1000000.0;
+      struct timeval tvAfter = {};
+      gettimeofday(&tvAfter, nullptr);
+      const int64_t ntpAfterRounded = (int64_t)tvAfter.tv_sec + ((tvAfter.tv_usec >= 500000) ? 1 : 0);
+      r.drift_after_sec = (double)(ntpAfterRounded - r.rtc_epoch_after);
       ESP_LOGI(TAG,
-               "NTP_TEST_POSTSYNC reason=%s ntp_epoch=%" PRId64 " rtc_epoch_after=%" PRId64
+               "NTP_TEST_POSTSYNC reason=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+               " ntp_rounded=%" PRId64 " rtc_epoch_after=%" PRId64
                " drift_after_sec=%.4f",
-               reason, r.ntp_epoch, r.rtc_epoch_after, r.drift_after_sec);
-      ESP_LOGI(TAG, "%s: post-sync RTC is %.3f seconds %s NTP",
-               prefix, fabs(r.drift_after_sec), (r.drift_after_sec >= 0.0) ? "behind" : "ahead of");
+               reason, (int64_t)tvAfter.tv_sec, (int64_t)tvAfter.tv_usec,
+               ntpAfterRounded, r.rtc_epoch_after, r.drift_after_sec);
+      if (fabs(r.drift_after_sec) < 1.0) {
+        ESP_LOGI(TAG, "%s: post-sync RTC is within 1 second variance of NTP", prefix);
+      } else {
+        ESP_LOGI(TAG, "%s: post-sync RTC is %.0f seconds %s NTP (rounded second compare)",
+                 prefix, fabs(r.drift_after_sec), (r.drift_after_sec >= 0.0) ? "behind" : "ahead of");
+      }
       ESP_LOGI(TAG, "%s: SUCCESS compare+sync complete (reason=%s)", prefix, reason);
       ok = true;
       break;
