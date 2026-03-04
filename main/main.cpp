@@ -99,12 +99,15 @@ static constexpr const char* NTP_TEST_SERVER_IPV6 = "fd7f:4975:d3c5:4f0a:bc3e:54
 static constexpr uint16_t NTP_TEST_PORT = 123;
 static constexpr uint32_t NTP_TEST_TIMEOUT_MS = 20000;
 static constexpr time_t NTP_TEST_DRIFT_THRESHOLD_SEC = RTC_MAX_DRIFT_SEC;
+static constexpr int64_t RTC_WRITE_ALIGN_WINDOW_US = 20000;     // 20 ms after second rollover
+static constexpr uint32_t RTC_WRITE_ALIGN_TIMEOUT_MS = 1500;    // wait up to 1.5 s for alignment
 static constexpr char DIAG_NS[] = "diag";
 static constexpr char DIAG_KEY_BOOT_COUNT[] = "boot_count";
 static constexpr char DIAG_KEY_LAST_RESET[] = "last_reset";
 static constexpr char DIAG_KEY_LAST_RESET_EPOCH[] = "last_reset_epoch";
 static constexpr char DIAG_KEY_RESET_HISTORY[] = "reset_hist";
-static constexpr uint32_t DIAG_RESET_HISTORY_MAX = 5;
+static constexpr uint32_t DIAG_RESET_HISTORY_MAX = 20;
+static constexpr uint32_t DIAG_RESET_HISTORY_LEGACY_MAX = 5;
 
 
 // -------------------- Display HW --------------------
@@ -148,7 +151,11 @@ static volatile bool gThreadAttached = false;
 static volatile bool gCommissioned = false;
 static volatile bool gRtcInitialSyncDone = false;
 static volatile bool gRtcInitialSyncDue = false;
+static volatile bool gNetworkSyncTxnActive = false;
 static volatile uint32_t gRtcSyncIntervalMs = RTC_SYNC_INTERVAL_MS;
+static portMUX_TYPE gTimeDiagMux = portMUX_INITIALIZER_UNLOCKED;
+static int64_t gLastNtpCompareEpoch = 0;
+static double gLastNtpCompareDriftSec = NAN;
 // Indicates whether network time is currently considered valid based on recent
 // NTP fetch results. Auto RTC writes are attempted only through the guarded
 // NTP sync pipeline.
@@ -160,6 +167,13 @@ static int64_t gPrevResetEpoch = 0;
 static int64_t gCurrentResetEpoch = 0;
 
 static bool rtc_read_epoch(time_t* out);
+static bool read_system_time_us(int64_t* outUsec);
+static bool read_rtc_epoch_sec(int64_t* outSec);
+static void format_epoch_us_local(int64_t epochSec, int64_t usec, char* out, size_t outLen);
+static bool is_network_sync_transaction_active();
+static int64_t days_from_civil(int32_t year, uint32_t mon, uint32_t day);
+static time_t utc_time_to_epoch(uint16_t year, uint8_t mon, uint8_t day,
+                                uint8_t hour, uint8_t min, uint8_t sec);
 
 typedef struct {
   uint32_t bootCount;
@@ -173,7 +187,97 @@ typedef struct {
   ResetEvent entries[DIAG_RESET_HISTORY_MAX];
 } ResetHistory;
 
+typedef struct {
+  uint32_t count;
+  uint32_t next;
+  ResetEvent entries[DIAG_RESET_HISTORY_LEGACY_MAX];
+} ResetHistoryLegacy;
+
 static ResetHistory gResetHistory = {};
+
+enum class HeapDiagBucket : uint8_t {
+  TimeSyncPoll = 0,
+  BsecRun,
+  MatterUpdate,
+  AlsUpdate,
+  DisplayUpdate,
+  BsecStateSave,
+  SerialCmd,
+  StatusLogBlock,
+  Count
+};
+
+typedef struct {
+  int32_t netBytes;
+  uint32_t calls;
+  uint32_t lossEvents;
+  uint32_t gainEvents;
+  uint32_t worstLoss;
+} HeapDiagStats;
+
+static const char* kHeapDiagBucketNames[(size_t)HeapDiagBucket::Count] = {
+  "time_sync_poll",
+  "bsec_run",
+  "matter_update",
+  "als_update",
+  "display_update",
+  "bsec_state_save",
+  "serial_cmd",
+  "status_log"
+};
+static HeapDiagStats gHeapDiag[(size_t)HeapDiagBucket::Count] = {};
+static bool gHeapDiagEnabled = true;
+static size_t gHeapDiagLastFree = 0;
+static size_t gHeapDiagLastLargest = 0;
+
+static void heap_diag_reset() {
+  memset(gHeapDiag, 0, sizeof(gHeapDiag));
+}
+
+static void heap_diag_account(HeapDiagBucket bucket, size_t before, size_t after) {
+  if (!gHeapDiagEnabled) return;
+  size_t idx = (size_t)bucket;
+  if (idx >= (size_t)HeapDiagBucket::Count) return;
+  int32_t delta = (int32_t)after - (int32_t)before;
+  HeapDiagStats* s = &gHeapDiag[idx];
+  s->calls++;
+  s->netBytes += delta;
+  if (delta < 0) {
+    uint32_t loss = (uint32_t)(-delta);
+    s->lossEvents++;
+    if (loss > s->worstLoss) s->worstLoss = loss;
+  } else if (delta > 0) {
+    s->gainEvents++;
+  }
+}
+
+static void heap_diag_log_and_reset(uint32_t intervalMs) {
+  if (!gHeapDiagEnabled) return;
+  const size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+  const size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  const size_t minimum = heap_caps_get_minimum_free_size(MALLOC_CAP_8BIT);
+  const int32_t freeDelta = (gHeapDiagLastFree > 0) ? ((int32_t)freeHeap - (int32_t)gHeapDiagLastFree) : 0;
+  const int32_t largestDelta = (gHeapDiagLastLargest > 0) ? ((int32_t)largest - (int32_t)gHeapDiagLastLargest) : 0;
+  ESP_LOGI(TAG,
+           "HeapDiag: free=%uB (%+d) largest=%uB (%+d) min=%uB window=%lu ms",
+           (unsigned)freeHeap, (int)freeDelta,
+           (unsigned)largest, (int)largestDelta,
+           (unsigned)minimum, (unsigned long)intervalMs);
+  gHeapDiagLastFree = freeHeap;
+  gHeapDiagLastLargest = largest;
+
+  for (size_t i = 0; i < (size_t)HeapDiagBucket::Count; i++) {
+    const HeapDiagStats* s = &gHeapDiag[i];
+    if (s->calls == 0) continue;
+    if (s->netBytes == 0 && s->lossEvents == 0 && s->gainEvents == 0) continue;
+    ESP_LOGI(TAG,
+             "HeapDiag[%s]: calls=%u net=%+dB loss_events=%u gain_events=%u worst_loss=%uB",
+             kHeapDiagBucketNames[i],
+             (unsigned)s->calls, (int)s->netBytes,
+             (unsigned)s->lossEvents, (unsigned)s->gainEvents, (unsigned)s->worstLoss);
+  }
+  heap_diag_reset();
+}
 
 static const char* resetReasonToStr(esp_reset_reason_t reason) {
   switch (reason) {
@@ -254,13 +358,40 @@ static void recordBootDiagnostics() {
   uint32_t prevReason = (uint32_t)ESP_RST_UNKNOWN;
   int64_t prevEpoch = 0;
   ResetHistory hist = {};
-  size_t histSize = sizeof(hist);
+  size_t histSize = 0;
   (void)nvs_get_u32(h, DIAG_KEY_BOOT_COUNT, &bootCount);
   (void)nvs_get_u32(h, DIAG_KEY_LAST_RESET, &prevReason);
   (void)nvs_get_i64(h, DIAG_KEY_LAST_RESET_EPOCH, &prevEpoch);
-  esp_err_t histErr = nvs_get_blob(h, DIAG_KEY_RESET_HISTORY, &hist, &histSize);
-  if (histErr != ESP_OK || histSize != sizeof(hist) ||
-      hist.count > DIAG_RESET_HISTORY_MAX || hist.next >= DIAG_RESET_HISTORY_MAX) {
+  esp_err_t histErr = nvs_get_blob(h, DIAG_KEY_RESET_HISTORY, nullptr, &histSize);
+  if (histErr == ESP_OK && histSize == sizeof(ResetHistory)) {
+    size_t readSize = sizeof(hist);
+    histErr = nvs_get_blob(h, DIAG_KEY_RESET_HISTORY, &hist, &readSize);
+    if (histErr != ESP_OK || readSize != sizeof(hist) ||
+        hist.count > DIAG_RESET_HISTORY_MAX || hist.next >= DIAG_RESET_HISTORY_MAX) {
+      memset(&hist, 0, sizeof(hist));
+    }
+  } else if (histErr == ESP_OK && histSize == sizeof(ResetHistoryLegacy)) {
+    ResetHistoryLegacy legacy = {};
+    size_t readSize = sizeof(legacy);
+    histErr = nvs_get_blob(h, DIAG_KEY_RESET_HISTORY, &legacy, &readSize);
+    if (histErr == ESP_OK && readSize == sizeof(legacy) &&
+        legacy.count <= DIAG_RESET_HISTORY_LEGACY_MAX &&
+        legacy.next < DIAG_RESET_HISTORY_LEGACY_MAX) {
+      memset(&hist, 0, sizeof(hist));
+      uint32_t count = legacy.count;
+      if (count > DIAG_RESET_HISTORY_LEGACY_MAX) count = DIAG_RESET_HISTORY_LEGACY_MAX;
+      uint32_t oldest = (legacy.next + DIAG_RESET_HISTORY_LEGACY_MAX - count) % DIAG_RESET_HISTORY_LEGACY_MAX;
+      for (uint32_t i = 0; i < count; i++) {
+        uint32_t idx = (oldest + i) % DIAG_RESET_HISTORY_LEGACY_MAX;
+        reset_history_append(&hist, &legacy.entries[idx]);
+      }
+      ESP_LOGI(TAG, "Migrated reset history from %lu to %lu entries",
+               (unsigned long)DIAG_RESET_HISTORY_LEGACY_MAX,
+               (unsigned long)DIAG_RESET_HISTORY_MAX);
+    } else {
+      memset(&hist, 0, sizeof(hist));
+    }
+  } else {
     memset(&hist, 0, sizeof(hist));
   }
 
@@ -1033,12 +1164,8 @@ static bool read_rtc_utc(RtcDateTime* out) {
 }
 
 static time_t rtc_time_to_epoch(const RtcDateTime& dt) {
-  char tz_buf[64] = {};
-  const char* tz_old = getenv("TZ");
-  if (tz_old) strncpy(tz_buf, tz_old, sizeof(tz_buf) - 1);
   if (RTC_STORES_UTC) {
-    setenv("TZ", "UTC0", 1);
-    tzset();
+    return utc_time_to_epoch(dt.year, dt.mon, dt.day, dt.hour, dt.min, dt.sec);
   }
   struct tm t = {};
   t.tm_year = dt.year - 1900;
@@ -1047,13 +1174,7 @@ static time_t rtc_time_to_epoch(const RtcDateTime& dt) {
   t.tm_hour = dt.hour;
   t.tm_min = dt.min;
   t.tm_sec = dt.sec;
-  time_t epoch = mktime(&t);
-  if (RTC_STORES_UTC) {
-    if (tz_old) setenv("TZ", tz_buf, 1);
-    else unsetenv("TZ");
-    tzset();
-  }
-  return epoch;
+  return mktime(&t);
 }
 
 static ClockTime readClockTime() {
@@ -1076,6 +1197,22 @@ static ClockTime readClockTime() {
 
 static uint8_t to_bcd(uint8_t v) {
   return (uint8_t)(((v / 10) << 4) | (v % 10));
+}
+
+static int64_t days_from_civil(int32_t year, uint32_t mon, uint32_t day) {
+  year -= (mon <= 2);
+  const int32_t era = (year >= 0 ? year : year - 399) / 400;
+  const uint32_t yoe = (uint32_t)(year - era * 400);
+  const uint32_t doy = (153 * (mon + (mon > 2 ? (uint32_t)-3 : 9)) + 2) / 5 + day - 1;
+  const uint32_t doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+  return (int64_t)era * 146097 + (int64_t)doe - 719468;
+}
+
+static time_t utc_time_to_epoch(uint16_t year, uint8_t mon, uint8_t day,
+                                uint8_t hour, uint8_t min, uint8_t sec) {
+  const int64_t days = days_from_civil((int32_t)year, (uint32_t)mon, (uint32_t)day);
+  const int64_t sod = (int64_t)hour * 3600LL + (int64_t)min * 60LL + (int64_t)sec;
+  return (time_t)(days * 86400LL + sod);
 }
 
 static bool rtc_set_time(uint16_t year, uint8_t mon, uint8_t day,
@@ -1151,20 +1288,40 @@ static void set_system_time_from_rtc() {
   set_system_time_from_epoch(rtc_epoch);
 }
 
-typedef struct {
-  const char* source;
-  int64_t ntp_epoch;
-  int64_t ntp_usec;
-  int64_t rtc_epoch_before;
-  int64_t rtc_epoch_after;
-  double drift_before_sec;
-  double drift_after_sec;
-  bool fetched;
-  bool rtc_before_valid;
-  bool rtc_after_valid;
-  bool rtc_written;
-  bool rtc_write_ok;
-} NtpRtcTestResult;
+static bool is_network_sync_transaction_active() {
+  return gNetworkSyncTxnActive;
+}
+
+static void set_last_ntp_compare(int64_t compareEpoch, double driftSec) {
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  gLastNtpCompareEpoch = compareEpoch;
+  gLastNtpCompareDriftSec = driftSec;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+}
+
+static void get_last_ntp_compare(int64_t* compareEpoch, double* driftSec) {
+  if (!compareEpoch || !driftSec) return;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  *compareEpoch = gLastNtpCompareEpoch;
+  *driftSec = gLastNtpCompareDriftSec;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+}
+
+static bool read_system_time_us(int64_t* outUsec) {
+  if (!outUsec) return false;
+  struct timeval tv = {};
+  gettimeofday(&tv, nullptr);
+  *outUsec = ((int64_t)tv.tv_sec * 1000000LL) + (int64_t)tv.tv_usec;
+  return true;
+}
+
+static bool read_rtc_epoch_sec(int64_t* outSec) {
+  if (!outSec) return false;
+  time_t rtc = 0;
+  if (!rtc_read_epoch(&rtc)) return false;
+  *outSec = (int64_t)rtc;
+  return true;
+}
 
 static void formatEpochLocal(int64_t epoch, char* out, size_t outLen) {
   if (!out || outLen == 0) return;
@@ -1180,10 +1337,82 @@ static void formatEpochLocal(int64_t epoch, char* out, size_t outLen) {
            tmLocal.tm_hour, tmLocal.tm_min, tmLocal.tm_sec);
 }
 
-static bool ntp_fetch_one_shot(const char* server, uint32_t timeoutMs, struct timeval* outTv, const char* prefix) {
+static void format_epoch_us_local(int64_t epochSec, int64_t usec, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  if (epochSec <= 0 || usec < 0) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  char local[32] = {};
+  formatEpochLocal(epochSec, local, sizeof(local));
+  snprintf(out, outLen, "%s.%06" PRId64, local, usec);
+}
+
+typedef struct {
+  const char* sourceServer;
+  int64_t ntpEpochSec;
+  int64_t ntpUsec;
+  int64_t sysAtFetchSec;
+  int64_t sysAtFetchUsec;
+  int64_t rtcBeforeSec;
+  int64_t rtcAfterSec;
+  double driftRtcBeforeSec;
+  double driftRtcAfterSec;
+  double driftSysBeforeMs;
+  double driftSysAfterMs;
+  double writePhaseMs;
+  bool fetched;
+  bool rtcBeforeValid;
+  bool rtcAfterValid;
+  bool writeAttempted;
+  bool writeSucceeded;
+} NetworkSyncMetrics;
+
+static bool wait_and_write_rtc_aligned_from_system(const char* prefix, double* outWritePhaseMs) {
+  if (!prefix) prefix = "RTC sync";
+  if (outWritePhaseMs) *outWritePhaseMs = NAN;
+  if (!is_network_sync_transaction_active()) {
+    ESP_LOGW(TAG, "%s: RTC write blocked (network sync transaction inactive)", prefix);
+    return false;
+  }
+
+  const int64_t deadlineUs = esp_timer_get_time() + ((int64_t)RTC_WRITE_ALIGN_TIMEOUT_MS * 1000LL);
+  while (esp_timer_get_time() < deadlineUs) {
+    struct timeval now = {};
+    gettimeofday(&now, nullptr);
+    if (now.tv_usec <= RTC_WRITE_ALIGN_WINDOW_US) {
+      if (outWritePhaseMs) *outWritePhaseMs = (double)now.tv_usec / 1000.0;
+      time_t writeEpoch = now.tv_sec;
+      ESP_LOGI(TAG, "%s: RTC aligned write target epoch=%ld (phase_ms=%.3f)",
+               prefix, (long)writeEpoch, outWritePhaseMs ? *outWritePhaseMs : -1.0);
+      return rtc_set_time_from_epoch(writeEpoch);
+    }
+    if (now.tv_usec >= (1000000 - RTC_WRITE_ALIGN_WINDOW_US)) {
+      vTaskDelay(pdMS_TO_TICKS(1));
+    } else {
+      const int32_t waitUs = (1000000 - (int32_t)now.tv_usec) - (int32_t)RTC_WRITE_ALIGN_WINDOW_US;
+      if (waitUs > 2000) {
+        vTaskDelay(pdMS_TO_TICKS((waitUs / 1000) - 1));
+      } else {
+        esp_rom_delay_us((uint32_t)waitUs);
+      }
+    }
+  }
+
+  struct timeval fallback = {};
+  gettimeofday(&fallback, nullptr);
+  if (outWritePhaseMs) *outWritePhaseMs = (double)fallback.tv_usec / 1000.0;
+  time_t writeEpoch = fallback.tv_sec + ((fallback.tv_usec >= 500000) ? 1 : 0);
+  ESP_LOGW(TAG, "%s: RTC write alignment timeout; using fallback epoch=%ld (phase_ms=%.3f)",
+           prefix, (long)writeEpoch, outWritePhaseMs ? *outWritePhaseMs : -1.0);
+  return rtc_set_time_from_epoch(writeEpoch);
+}
+
+static bool ntp_fetch_one_shot(const char* server, uint32_t timeoutMs, struct timeval* outTv, int64_t* outSysUsecAtFetch, const char* prefix) {
   if (!server || !outTv) return false;
   if (!prefix) prefix = "NTP test";
   *outTv = {};
+  if (outSysUsecAtFetch) *outSysUsecAtFetch = 0;
 
   ESP_LOGI(TAG, "%s: starting one-shot fetch server=%s port=%u timeout=%lu ms",
            prefix,
@@ -1215,6 +1444,9 @@ static bool ntp_fetch_one_shot(const char* server, uint32_t timeoutMs, struct ti
   }
 
   gettimeofday(outTv, nullptr);
+  if (outSysUsecAtFetch) {
+    (void)read_system_time_us(outSysUsecAtFetch);
+  }
   const uint64_t elapsed = (esp_timer_get_time() - t0) / 1000ULL;
   ESP_LOGI(TAG, "%s: fetch success server=%s epoch=%" PRId64 ".%06ld elapsed=%llu ms",
            prefix,
@@ -1235,6 +1467,7 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
 
   bool ok = false;
   do {
+    gNetworkSyncTxnActive = true;
     if (verboseLogs) {
       ESP_LOGI(TAG, "%s: stage 1/4 start mode=%s timeout=%lu ms reason=%s",
                prefix, allowWrite ? "compare+sync" : "compare-only",
@@ -1244,72 +1477,86 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
                prefix, allowWrite ? "compare+sync" : "compare-only", reason);
     }
 
-    NtpRtcTestResult r = {};
-    r.source = "none";
+    NetworkSyncMetrics m = {};
+    m.sourceServer = "none";
+    m.writePhaseMs = NAN;
 
-    time_t rtcBefore = 0;
-    r.rtc_before_valid = rtc_read_epoch(&rtcBefore);
-    if (r.rtc_before_valid) {
-      r.rtc_epoch_before = (int64_t)rtcBefore;
+    int64_t rtcBefore = 0;
+    m.rtcBeforeValid = read_rtc_epoch_sec(&rtcBefore);
+    if (m.rtcBeforeValid) {
+      m.rtcBeforeSec = rtcBefore;
       if (verboseLogs) {
         char rtcLocal[32] = {};
-        formatEpochLocal(r.rtc_epoch_before, rtcLocal, sizeof(rtcLocal));
+        formatEpochLocal(m.rtcBeforeSec, rtcLocal, sizeof(rtcLocal));
         ESP_LOGI(TAG, "%s: stage 2/4 RTC precheck epoch=%" PRId64 " local=%s",
-                 prefix, r.rtc_epoch_before, rtcLocal);
+                 prefix, m.rtcBeforeSec, rtcLocal);
       }
     } else {
       ESP_LOGW(TAG, "%s: RTC precheck failed (unreadable)", prefix);
     }
 
     struct timeval tv = {};
+    int64_t sysUsecAtFetch = 0;
     const char* servers[] = {NTP_TEST_SERVER_IPV6, NTP_TEST_SERVER_IPV4};
     for (size_t i = 0; i < (sizeof(servers) / sizeof(servers[0])); ++i) {
       if (verboseLogs) {
         ESP_LOGI(TAG, "%s: stage 3/4 attempt %u/%u server=%s",
                  prefix, (unsigned)(i + 1), (unsigned)(sizeof(servers) / sizeof(servers[0])), servers[i]);
       }
-      if (ntp_fetch_one_shot(servers[i], NTP_TEST_TIMEOUT_MS, &tv, prefix)) {
-        r.fetched = true;
-        r.source = servers[i];
-        r.ntp_epoch = (int64_t)tv.tv_sec;
-        r.ntp_usec = (int64_t)tv.tv_usec;
+      if (ntp_fetch_one_shot(servers[i], NTP_TEST_TIMEOUT_MS, &tv, &sysUsecAtFetch, prefix)) {
+        m.fetched = true;
+        m.sourceServer = servers[i];
+        m.ntpEpochSec = (int64_t)tv.tv_sec;
+        m.ntpUsec = (int64_t)tv.tv_usec;
+        m.sysAtFetchSec = sysUsecAtFetch / 1000000LL;
+        m.sysAtFetchUsec = sysUsecAtFetch % 1000000LL;
         break;
       }
     }
 
-    if (!r.fetched) {
+    if (!m.fetched) {
       gNetTimeValid = false;
       ESP_LOGW(TAG, "%s: FAILURE no server returned time (reason=%s)", prefix, reason);
       break;
     }
     gNetTimeValid = true;
+    if (verboseLogs) {
+      char ntpLocalUs[48] = {};
+      format_epoch_us_local(m.ntpEpochSec, m.ntpUsec, ntpLocalUs, sizeof(ntpLocalUs));
+      ESP_LOGI(TAG, "%s: stage 4/4 NTP sample source=%s local=%s",
+               prefix, m.sourceServer, ntpLocalUs);
+    }
 
-    // Compare like-to-like by sampling RTC near the network-time sample point.
-    struct timeval tvCompare = {};
-    gettimeofday(&tvCompare, nullptr);
-    r.ntp_epoch = (int64_t)tvCompare.tv_sec;
-    r.ntp_usec = (int64_t)tvCompare.tv_usec;
-    const int64_t ntpRounded = r.ntp_epoch + ((r.ntp_usec >= 500000) ? 1 : 0);
-    time_t rtcCompare = 0;
-    r.rtc_before_valid = rtc_read_epoch(&rtcCompare);
-    if (r.rtc_before_valid) {
-      r.rtc_epoch_before = (int64_t)rtcCompare;
-      r.drift_before_sec = (double)(ntpRounded - r.rtc_epoch_before);
+    const double ntpContinuousSec = (double)m.ntpEpochSec + ((double)m.ntpUsec / 1000000.0);
+    m.driftSysBeforeMs = ((((double)m.sysAtFetchSec - (double)m.ntpEpochSec) * 1000000.0) +
+                          ((double)m.sysAtFetchUsec - (double)m.ntpUsec)) / 1000.0;
+    int64_t rtcCompare = 0;
+    m.rtcBeforeValid = read_rtc_epoch_sec(&rtcCompare);
+    if (m.rtcBeforeValid) {
+      m.rtcBeforeSec = rtcCompare;
+      m.driftRtcBeforeSec = ntpContinuousSec - (double)m.rtcBeforeSec;
+      set_last_ntp_compare(m.ntpEpochSec, m.driftRtcBeforeSec);
       ESP_LOGI(TAG,
-               "NTP_TEST_RESULT reason=%s source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
-               " ntp_rounded=%" PRId64 " rtc_epoch_before=%" PRId64 " drift_before_sec=%.4f",
-               reason, r.source, r.ntp_epoch, r.ntp_usec, ntpRounded, r.rtc_epoch_before, r.drift_before_sec);
-      if (fabs(r.drift_before_sec) < 1.0) {
+               "SYNC_METRIC reason=%s phase=pre source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+               " sys_epoch=%" PRId64 " sys_usec=%" PRId64 " rtc_epoch=%" PRId64
+               " drift_rtc_sec=%.4f drift_sys_ms=%.3f write_phase_ms=nan",
+               reason, m.sourceServer, m.ntpEpochSec, m.ntpUsec,
+               m.sysAtFetchSec, m.sysAtFetchUsec, m.rtcBeforeSec,
+               m.driftRtcBeforeSec, m.driftSysBeforeMs);
+      if (fabs(m.driftRtcBeforeSec) < 1.0) {
         ESP_LOGI(TAG, "%s: RTC is within 1 second variance of NTP", prefix);
       } else {
-        ESP_LOGI(TAG, "%s: RTC is %.0f seconds %s NTP (rounded second compare)",
-                 prefix, fabs(r.drift_before_sec), (r.drift_before_sec >= 0.0) ? "behind" : "ahead of");
+        ESP_LOGI(TAG, "%s: RTC is %.1f seconds %s NTP",
+                 prefix, fabs(m.driftRtcBeforeSec), (m.driftRtcBeforeSec >= 0.0) ? "behind" : "ahead of");
       }
     } else {
+      set_last_ntp_compare(m.ntpEpochSec, NAN);
       ESP_LOGI(TAG,
-               "NTP_TEST_RESULT reason=%s source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
-               " ntp_rounded=%" PRId64 " rtc_epoch_before=unknown drift_before_sec=nan",
-               reason, r.source, r.ntp_epoch, r.ntp_usec, ntpRounded);
+               "SYNC_METRIC reason=%s phase=pre source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+               " sys_epoch=%" PRId64 " sys_usec=%" PRId64 " rtc_epoch=unknown"
+               " drift_rtc_sec=nan drift_sys_ms=%.3f write_phase_ms=nan",
+               reason, m.sourceServer, m.ntpEpochSec, m.ntpUsec, m.sysAtFetchSec, m.sysAtFetchUsec,
+               m.driftSysBeforeMs);
       ESP_LOGI(TAG, "%s: RTC comparison skipped (RTC unreadable)", prefix);
     }
 
@@ -1319,48 +1566,51 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
       break;
     }
 
-    bool needsWrite = !r.rtc_before_valid;
-    if (r.rtc_before_valid) {
-      needsWrite = fabs(r.drift_before_sec) > (double)NTP_TEST_DRIFT_THRESHOLD_SEC;
+    bool needsWrite = !m.rtcBeforeValid;
+    if (m.rtcBeforeValid) {
+      needsWrite = fabs(m.driftRtcBeforeSec) > (double)NTP_TEST_DRIFT_THRESHOLD_SEC;
     }
     if (!needsWrite) {
-      ESP_LOGI(TAG, "%s: RTC drift <= %ld sec, no write needed (reason=%s)",
-               prefix, (long)NTP_TEST_DRIFT_THRESHOLD_SEC, reason);
+      ESP_LOGI(TAG, "%s: RTC drift %.3f sec <= %ld sec, no write needed (reason=%s)",
+               prefix, fabs(m.driftRtcBeforeSec), (long)NTP_TEST_DRIFT_THRESHOLD_SEC, reason);
+      m.writeAttempted = false;
     } else {
       ESP_LOGI(TAG, "%s: syncing RTC to NTP time... (reason=%s)", prefix, reason);
-      r.rtc_written = true;
-      struct timeval tvWrite = {};
-      gettimeofday(&tvWrite, nullptr);
-      time_t writeEpoch = tvWrite.tv_sec + ((tvWrite.tv_usec >= 500000) ? 1 : 0);
-      ESP_LOGI(TAG, "%s: RTC write target epoch=%ld (rounded from %ld.%06ld)",
-               prefix, (long)writeEpoch, (long)tvWrite.tv_sec, (long)tvWrite.tv_usec);
-      r.rtc_write_ok = rtc_set_time_from_epoch(writeEpoch);
-      ESP_LOGI(TAG, "%s: RTC sync %s", prefix, r.rtc_write_ok ? "SUCCEEDED" : "FAILED");
-      if (!r.rtc_write_ok) {
+      m.writeAttempted = true;
+      set_system_time_from_epoch((time_t)m.ntpEpochSec);
+      m.writeSucceeded = wait_and_write_rtc_aligned_from_system(prefix, &m.writePhaseMs);
+      ESP_LOGI(TAG, "%s: RTC sync %s", prefix, m.writeSucceeded ? "SUCCEEDED" : "FAILED");
+      if (!m.writeSucceeded) {
         ESP_LOGW(TAG, "%s: FAILURE RTC write failed (reason=%s)", prefix, reason);
         break;
       }
     }
 
-    time_t rtcAfter = 0;
-    r.rtc_after_valid = rtc_read_epoch(&rtcAfter);
-    if (r.rtc_after_valid) {
-      r.rtc_epoch_after = (int64_t)rtcAfter;
-      struct timeval tvAfter = {};
-      gettimeofday(&tvAfter, nullptr);
-      const int64_t ntpAfterRounded = (int64_t)tvAfter.tv_sec + ((tvAfter.tv_usec >= 500000) ? 1 : 0);
-      r.drift_after_sec = (double)(ntpAfterRounded - r.rtc_epoch_after);
+    int64_t sysAfterUs = 0;
+    (void)read_system_time_us(&sysAfterUs);
+    m.sysAtFetchSec = sysAfterUs / 1000000LL;
+    m.sysAtFetchUsec = sysAfterUs % 1000000LL;
+    const double sysContinuousAfterSec = (double)m.sysAtFetchSec + ((double)m.sysAtFetchUsec / 1000000.0);
+    m.driftSysAfterMs = ((((double)m.sysAtFetchSec - (double)m.ntpEpochSec) * 1000000.0) +
+                         ((double)m.sysAtFetchUsec - (double)m.ntpUsec)) / 1000.0;
+
+    int64_t rtcAfter = 0;
+    m.rtcAfterValid = read_rtc_epoch_sec(&rtcAfter);
+    if (m.rtcAfterValid) {
+      m.rtcAfterSec = rtcAfter;
+      m.driftRtcAfterSec = sysContinuousAfterSec - (double)m.rtcAfterSec;
       ESP_LOGI(TAG,
-               "NTP_TEST_POSTSYNC reason=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
-               " ntp_rounded=%" PRId64 " rtc_epoch_after=%" PRId64
-               " drift_after_sec=%.4f",
-               reason, (int64_t)tvAfter.tv_sec, (int64_t)tvAfter.tv_usec,
-               ntpAfterRounded, r.rtc_epoch_after, r.drift_after_sec);
-      if (fabs(r.drift_after_sec) < 1.0) {
+               "SYNC_METRIC reason=%s phase=post source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+               " sys_epoch=%" PRId64 " sys_usec=%" PRId64 " rtc_epoch=%" PRId64
+               " drift_rtc_sec=%.4f drift_sys_ms=%.3f write_phase_ms=%.3f",
+               reason, m.sourceServer, m.ntpEpochSec, m.ntpUsec,
+               m.sysAtFetchSec, m.sysAtFetchUsec, m.rtcAfterSec,
+               m.driftRtcAfterSec, m.driftSysAfterMs, m.writePhaseMs);
+      if (fabs(m.driftRtcAfterSec) < 1.0) {
         ESP_LOGI(TAG, "%s: post-sync RTC is within 1 second variance of NTP", prefix);
       } else {
-        ESP_LOGI(TAG, "%s: post-sync RTC is %.0f seconds %s NTP (rounded second compare)",
-                 prefix, fabs(r.drift_after_sec), (r.drift_after_sec >= 0.0) ? "behind" : "ahead of");
+        ESP_LOGI(TAG, "%s: post-sync RTC is %.1f seconds %s NTP",
+                 prefix, fabs(m.driftRtcAfterSec), (m.driftRtcAfterSec >= 0.0) ? "behind" : "ahead of");
       }
       ESP_LOGI(TAG, "%s: SUCCESS compare+sync complete (reason=%s)", prefix, reason);
       ok = true;
@@ -1368,11 +1618,15 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     }
 
     ESP_LOGW(TAG,
-             "NTP_TEST_POSTSYNC reason=%s ntp_epoch=%" PRId64 " rtc_epoch_after=unknown drift_after_sec=nan",
-             reason, r.ntp_epoch);
+             "SYNC_METRIC reason=%s phase=post source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
+             " sys_epoch=%" PRId64 " sys_usec=%" PRId64 " rtc_epoch=unknown"
+             " drift_rtc_sec=nan drift_sys_ms=%.3f write_phase_ms=%.3f",
+             reason, m.sourceServer, m.ntpEpochSec, m.ntpUsec,
+             m.sysAtFetchSec, m.sysAtFetchUsec, m.driftSysAfterMs, m.writePhaseMs);
     ESP_LOGW(TAG, "%s: RTC re-read failed after sync attempt (reason=%s)", prefix, reason);
   } while (false);
 
+  gNetworkSyncTxnActive = false;
   if (gRtcSyncMutex) xSemaphoreGive(gRtcSyncMutex);
   return ok;
 }
@@ -1600,6 +1854,35 @@ static void updateDisplayRhTestPattern() {
   display.commit();
 }
 
+static void print_serial_help() {
+  printf("=======SERIAL COMMANDS=======\n");
+  printf("=============================\n");
+  printf("________RUNTIME DEBUG________\n");
+    printf("help - Show this command list.\n");
+    printf("loginfo on|off - Set esp_clock log level at runtime.\n");
+    printf("heapdiag on|off|reset - Control per-section heap diagnostics.\n");
+    printf("rebootcause - Print previous/current reset reason.\n");
+    printf("reboothistory - Print stored reset history ring.\n");
+  printf("__________RTC DEBUG__________\n");
+    printf("rtc - Print RTC UTC time.\n");
+    printf("rtc YYYY-MM-DD HH:MM:SS - Set RTC UTC time.\n");
+    printf("rtc +/-SECONDS - Adjust RTC by a signed second delta.\n");
+  printf("_______TIME SYNC DEBUG_______\n");
+    printf("timesync - Show time sync state and interval.\n");
+    printf("timesync now - Run immediate NTP->RTC sync flow.\n");
+    printf("timesync interval <seconds> - Set runtime periodic sync interval.\n");
+    printf("timesync interval default - Restore default periodic sync interval.\n");
+  printf("__________NTP DEBUG__________\n");
+    printf("ntptest - Run compare-only NTP vs RTC test.\n");
+    printf("ntptest sync - Run NTP test and sync RTC if needed.\n");
+  printf("________DISPLAY DEBUG________\n");
+    printf("pwm <1-4095> - Set fixed display PWM brightness.\n");
+    printf("pwm auto - Re-enable automatic brightness control.\n");
+    printf("refresh <microseconds> - Set display multiplex page period.\n");
+    printf("display - Print display host/pin mapping.\n");
+
+}
+
 static void handleDisplaySerialCommands() {
   static char buf[64];
   static size_t idx = 0;
@@ -1612,7 +1895,9 @@ static void handleDisplaySerialCommands() {
     if (ch == '\n' || ch == '\r') {
       buf[idx] = '\0';
       if (idx > 0) {
-        if (strncmp(buf, "loginfo on", 10) == 0) {
+        if (strcmp(buf, "help") == 0) {
+          print_serial_help();
+        } else if (strncmp(buf, "loginfo on", 10) == 0) {
           esp_log_level_set(TAG, ESP_LOG_INFO);
           gLogInfoPinned = true;
           printf("esp_clock log level: INFO\n");
@@ -1620,6 +1905,20 @@ static void handleDisplaySerialCommands() {
           esp_log_level_set(TAG, ESP_LOG_ERROR);
           gLogInfoPinned = true;
           printf("esp_clock log level: ERROR\n");
+        } else if (strcmp(buf, "heapdiag on") == 0) {
+          gHeapDiagEnabled = true;
+          gHeapDiagLastFree = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+          gHeapDiagLastLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+          heap_diag_reset();
+          ESP_LOGI(TAG, "heapdiag: enabled");
+        } else if (strcmp(buf, "heapdiag off") == 0) {
+          gHeapDiagEnabled = false;
+          ESP_LOGI(TAG, "heapdiag: disabled");
+        } else if (strcmp(buf, "heapdiag reset") == 0) {
+          gHeapDiagLastFree = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+          gHeapDiagLastLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+          heap_diag_reset();
+          ESP_LOGI(TAG, "heapdiag: counters reset");
         } else if (strncmp(buf, "pwm auto", 8) == 0) {
           gBrightnessOverride = false;
           display.setScaleRh(true);
@@ -1806,10 +2105,19 @@ static void sensor_task(void*) {
   bool threadConfigured = false;
   while (true) {
     #if !DISABLE_TIME_SYNC
+      size_t heapBeforeTimeSync = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       time_sync_poll();
+      size_t heapAfterTimeSync = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      heap_diag_account(HeapDiagBucket::TimeSyncPoll, heapBeforeTimeSync, heapAfterTimeSync);
     #endif
-    if (gHasBme680 && !env.run()) {
-      ESP_LOGW(TAG, "BSEC run returned false");
+    if (gHasBme680) {
+      size_t heapBeforeBsecRun = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      bool bsecOk = env.run();
+      size_t heapAfterBsecRun = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      heap_diag_account(HeapDiagBucket::BsecRun, heapBeforeBsecRun, heapAfterBsecRun);
+      if (!bsecOk) {
+        ESP_LOGW(TAG, "BSEC run returned false");
+      }
     }
     if (!threadConfigured) {
 #if ESP_CLOCK_HAS_MATTER && ESP_CLOCK_HAS_OPENTHREAD
@@ -1819,22 +2127,41 @@ static void sensor_task(void*) {
       }
 #endif
     }
+    size_t heapBeforeMatter = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     matter_update();
+    size_t heapAfterMatter = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    heap_diag_account(HeapDiagBucket::MatterUpdate, heapBeforeMatter, heapAfterMatter);
     uint32_t now = millis_ms();
     if (now - lastLuxMs > 500) {
+      size_t heapBeforeAls = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       if (!DISPLAY_RH_TEST_MODE && !gBrightnessOverride) {
         uint16_t als = read_veml7700();
         display.setBrightness(scale_brightness(als));
       }
+      size_t heapAfterAls = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      heap_diag_account(HeapDiagBucket::AlsUpdate, heapBeforeAls, heapAfterAls);
       lastLuxMs = now;
     }
+    size_t heapBeforeDisplay = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     if (DISPLAY_RH_TEST_MODE) updateDisplayRhTestPattern();
     else if (DISPLAY_TEST_MODE) updateDisplayTestPattern();
     else updateDisplayFromState();
-    if (gHasBme680) saveBsecStateIfReady(millis_ms());
+    size_t heapAfterDisplay = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    heap_diag_account(HeapDiagBucket::DisplayUpdate, heapBeforeDisplay, heapAfterDisplay);
+    if (gHasBme680) {
+      size_t heapBeforeBsecSave = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      saveBsecStateIfReady(millis_ms());
+      size_t heapAfterBsecSave = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      heap_diag_account(HeapDiagBucket::BsecStateSave, heapBeforeBsecSave, heapAfterBsecSave);
+    }
+    size_t heapBeforeSerial = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     handleDisplaySerialCommands();
+    size_t heapAfterSerial = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+    heap_diag_account(HeapDiagBucket::SerialCmd, heapBeforeSerial, heapAfterSerial);
 
     if (now - lastLogMs > 5000) {
+      size_t heapBeforeStatusLog = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      uint32_t logWindowMs = now - lastLogMs;
       ClockTime ct = readClockTime();
       int h12 = ct.hour % 12;
       if (h12 == 0) h12 = 12;
@@ -1849,16 +2176,69 @@ static void sensor_task(void*) {
         mon = localTm.tm_mon + 1;
         day = localTm.tm_mday;
       }
+      time_t sysEpoch = time(nullptr);
+      struct tm sysLocalTm = {};
+      localtime_r(&sysEpoch, &sysLocalTm);
+      int sysHour24 = sysLocalTm.tm_hour;
+      int sysHour12 = sysHour24 % 12;
+      if (sysHour12 == 0) sysHour12 = 12;
+      const char* sysAmPm = (sysHour24 >= 12) ? "PM" : "AM";
       const UBaseType_t hwmWords = uxTaskGetStackHighWaterMark(nullptr);
-      const size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
-      ESP_LOGI(TAG, "RTC %04d-%02d-%02d %02u:%02u:%02u (%s) | Display %02d:%02d:%02u (%s) | Temp %.1f F | RH %.1f%%",
+      char tempBuf[16] = "nan";
+      char rhBuf[16] = "nan";
+      if (isfinite(vTempC)) {
+        int tempTenthsF = (int)lroundf((vTempC * 9.0f / 5.0f + 32.0f) * 10.0f);
+        int tempWhole = tempTenthsF / 10;
+        int tempFrac = abs(tempTenthsF % 10);
+        snprintf(tempBuf, sizeof(tempBuf), "%d.%d", tempWhole, tempFrac);
+      }
+      if (isfinite(vHum)) {
+        int rhTenths = (int)lroundf(vHum * 10.0f);
+        int rhWhole = rhTenths / 10;
+        int rhFrac = abs(rhTenths % 10);
+        snprintf(rhBuf, sizeof(rhBuf), "%d.%d", rhWhole, rhFrac);
+      }
+      ESP_LOGI(TAG, "RTC %04d-%02d-%02d %02u:%02u:%02u (%s) | Display %02d:%02d:%02u (%s) | Sys %04d-%02d-%02d %02d:%02d:%02d (%s) | Temp %s F | RH %s%%",
                year, mon, day,
                ct.hour, ct.minute, ct.second, ct.pm ? "PM" : "AM",
                h12, ct.minute, ct.second, ct.pm ? "PM" : "AM",
-               (double)(vTempC * 9.0f / 5.0f + 32.0f),
-               (double)vHum);
+               sysLocalTm.tm_year + 1900, sysLocalTm.tm_mon + 1, sysLocalTm.tm_mday,
+               sysHour12, sysLocalTm.tm_min, sysLocalTm.tm_sec, sysAmPm,
+               tempBuf, rhBuf);
+      int64_t lastCompareEpoch = 0;
+      double lastCompareDriftSec = NAN;
+      get_last_ntp_compare(&lastCompareEpoch, &lastCompareDriftSec);
+      if (lastCompareEpoch > 0) {
+        char lastCompareLocal[32] = {};
+        formatEpochLocal(lastCompareEpoch, lastCompareLocal, sizeof(lastCompareLocal));
+        double daysAgo = ((double)sysEpoch - (double)lastCompareEpoch) / 86400.0;
+        if (daysAgo < 0.0) daysAgo = 0.0;
+        int32_t daysAgo100 = (int32_t)lround(daysAgo * 100.0);
+        int32_t daysWhole = daysAgo100 / 100;
+        int32_t daysFrac = abs(daysAgo100 % 100);
+        if (isfinite(lastCompareDriftSec)) {
+          int32_t driftMs = (int32_t)lround(fabs(lastCompareDriftSec) * 1000.0);
+          int32_t driftWhole = driftMs / 1000;
+          int32_t driftFrac = abs(driftMs % 1000);
+          ESP_LOGI(TAG,
+                   "Last NTP compare %ld.%02ld days ago (%s) | Drift %ld.%03ld sec (%s)",
+                   (long)daysWhole, (long)daysFrac, lastCompareLocal,
+                   (long)driftWhole, (long)driftFrac,
+                   (lastCompareDriftSec >= 0.0) ? "RTC behind NTP" : "RTC ahead of NTP");
+        } else {
+          ESP_LOGI(TAG,
+                   "Last NTP compare %ld.%02ld days ago (%s) | Drift unavailable",
+                   (long)daysWhole, (long)daysFrac, lastCompareLocal);
+        }
+      } else {
+        ESP_LOGI(TAG, "Last NTP compare: none yet");
+      }
+      size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       ESP_LOGI(TAG, "Health: free_heap=%uB sensor_stack_hwm=%uB",
                (unsigned)freeHeap, (unsigned)(hwmWords * sizeof(StackType_t)));
+      size_t heapAfterStatusLog = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+      heap_diag_account(HeapDiagBucket::StatusLogBlock, heapBeforeStatusLog, heapAfterStatusLog);
+      heap_diag_log_and_reset(logWindowMs);
       lastLogMs = now;
     }
 
@@ -1909,6 +2289,9 @@ extern "C" void app_main() {
   recordBootDiagnostics();
   init_bsec();
   init_veml7700();
+  gHeapDiagLastFree = heap_caps_get_free_size(MALLOC_CAP_8BIT);
+  gHeapDiagLastLargest = heap_caps_get_largest_free_block(MALLOC_CAP_8BIT);
+  heap_diag_reset();
   setenv("TZ", LOCAL_TZ, 1);
   tzset();
 
