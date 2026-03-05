@@ -32,6 +32,23 @@
 - RH% test mode exists via `DISPLAY_RH_TEST_MODE` in `main/main.cpp`; it steps commons to verify the RH cluster wiring.
 - Commissioning currently succeeds; IAQ endpoint is still not reporting correctly (open item).
 
+## Heap Safety Learnings
+- Treat periodic paths (`<=1s`) as allocation-free zones.
+- Do not call `setenv()`, `unsetenv()`, or `tzset()` inside loops/tasks; timezone should be configured once at boot.
+- Avoid float `%f` formatting in frequent logs; prefer fixed-point integer formatting in hot paths.
+- For time conversion from RTC UTC, use direct UTC epoch conversion logic instead of mutating process TZ state.
+- Use runtime heap diagnostics during soak tests (`logheap on|off|reset`) and confirm:
+  - `Health: free_heap` has no monotonic decline.
+  - `HeapDiag` window deltas average to stable over long runs (ignore one-off allocator churn).
+- Validate for at least 2x the previous failure window (historically ~60-90 minutes for this issue).
+
+## Pre-Merge Checklist (Time/Loop/Logging Changes)
+- If `sensor_task` timing or call order changed: run a hardware soak test with `logheap on` for at least 2x prior failure window.
+- If RTC/time conversion code changed: verify no per-loop env/timezone mutation APIs (`setenv`, `unsetenv`, `tzset`) were added.
+- If periodic log format changed: verify hot-path logs avoid float `%f` formatting.
+- Confirm `Health` and `HeapDiag` trends are stable (no monotonic heap drop) before merge.
+- Confirm no new `PANIC` entries in `reboothistory` during validation run.
+
 ## Hardware & Integration Notes
 - Target board: Seeed XIAO ESP32-C6.
 - Display chain: TLC5947 (24-channel cathode sink over SPI) + TBD62783APG (4 GPIO common-anode drivers) multiplexing 10x 7-segment displays.
@@ -55,6 +72,7 @@
 - `pwm <1..4095>`: set global PWM brightness and lock ALS updates.
 - `pwm auto`: re-enable ALS brightness control.
 - `loginfo on|off`: toggle `esp_clock` INFO logs at runtime.
+- `logheap on|off|reset`: control `Health` and `HeapDiag` logging (legacy alias: `heapdiag`).
 
 ## Build Flags & Tunables
 - `DISPLAY_TEST_MODE` and `DISPLAY_RH_TEST_MODE` in `main/main.cpp`.
