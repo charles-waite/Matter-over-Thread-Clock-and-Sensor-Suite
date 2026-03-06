@@ -248,6 +248,9 @@ static bool gHeapDiagEnabled = (LOGHEAP_DEFAULT != 0);
 static bool gLogTimeEnabled = (LOGTIME_DEFAULT != 0);
 static size_t gHeapDiagLastFree = 0;
 static size_t gHeapDiagLastLargest = 0;
+#if ESP_CLOCK_HAS_USB_SERIAL_JTAG
+static bool gUsbSerialReady = false;
+#endif
 
 static void heap_diag_reset() {
   memset(gHeapDiag, 0, sizeof(gHeapDiag));
@@ -2076,11 +2079,17 @@ static void handleDisplaySerialCommands() {
   static char buf[64];
   static size_t idx = 0;
   uint8_t ch;
+  while (true) {
+    bool got = false;
 #if ESP_CLOCK_HAS_USB_SERIAL_JTAG
-  while (usb_serial_jtag_read_bytes(&ch, 1, 0) == 1) {
-#else
-  while (uart_read_bytes(UART_NUM_0, &ch, 1, 0) == 1) {
+    if (gUsbSerialReady && usb_serial_jtag_read_bytes(&ch, 1, 0) == 1) {
+      got = true;
+    }
 #endif
+    if (!got && uart_read_bytes(UART_NUM_0, &ch, 1, 0) == 1) {
+      got = true;
+    }
+    if (!got) break;
     if (ch == '\n' || ch == '\r') {
       buf[idx] = '\0';
       if (idx > 0) {
@@ -2487,7 +2496,14 @@ extern "C" void app_main() {
   usb_serial_jtag_driver_config_t usb_cfg = {};
   usb_cfg.rx_buffer_size = 1024;
   usb_cfg.tx_buffer_size = 1024;
-  usb_serial_jtag_driver_install(&usb_cfg);
+  esp_err_t usbErr = usb_serial_jtag_driver_install(&usb_cfg);
+  if (usbErr == ESP_OK) {
+    gUsbSerialReady = true;
+    ESP_LOGI(TAG, "USB Serial JTAG ready; UART0 remains fallback");
+  } else {
+    gUsbSerialReady = false;
+    ESP_LOGW(TAG, "USB Serial JTAG init failed (%s); using UART0", esp_err_to_name(usbErr));
+  }
 #endif
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_platform_config();
