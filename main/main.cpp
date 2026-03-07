@@ -1575,6 +1575,16 @@ static void log_clock_status_snapshot(const char* context) {
     daysWhole = daysAgo100 / 100;
     daysFrac = abs(daysAgo100 % 100);
   }
+  char ntpAgeText[32] = "never";
+  if (lastCompareEpoch > 0) {
+    int64_t ageSec = (int64_t)sysEpoch - lastCompareEpoch;
+    if (ageSec < 0) ageSec = 0;
+    int64_t ageH = ageSec / 3600LL;
+    int64_t ageM = (ageSec % 3600LL) / 60LL;
+    int64_t ageS = ageSec % 60LL;
+    snprintf(ntpAgeText, sizeof(ntpAgeText), "%02lld:%02lld:%02lld ago",
+             (long long)ageH, (long long)ageM, (long long)ageS);
+  }
 
   char ntpDriftText[80] = "unavailable";
   if (isfinite(lastCompareDriftSec)) {
@@ -1598,12 +1608,12 @@ static void log_clock_status_snapshot(const char* context) {
 
   if (lastCompareEpoch > 0) {
     ESP_LOGI(TAG,
-             "Last NTP/Matter compare %ld.%02ld days ago | Current RTC Local = %s | RTC->NTP drift = %s | RTC->Matter drift = %s",
-             (long)daysWhole, (long)daysFrac, rtcLocal, ntpDriftText, matterDriftText);
+             "Last NTP/Matter compare %ld.%02ld days ago | Current RTC Local = %s | RTC->NTP drift = %s (last checked %s) | RTC->Matter drift = %s",
+             (long)daysWhole, (long)daysFrac, rtcLocal, ntpDriftText, ntpAgeText, matterDriftText);
   } else {
     ESP_LOGI(TAG,
-             "Last NTP/Matter compare none yet | Current RTC Local = %s | RTC->NTP drift = %s | RTC->Matter drift = %s",
-             rtcLocal, ntpDriftText, matterDriftText);
+             "Last NTP/Matter compare none yet | Current RTC Local = %s | RTC->NTP drift = %s (last checked %s) | RTC->Matter drift = %s",
+             rtcLocal, ntpDriftText, ntpAgeText, matterDriftText);
   }
 }
 
