@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <time.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netdb.h>
 // For settimeofday
 #include <sys/time.h>
 // -------------------- Time Sync Kill Switch --------------------
@@ -130,6 +134,10 @@ static constexpr char DIAG_KEY_LAST_RESET_EPOCH[] = "last_reset_epoch";
 static constexpr char DIAG_KEY_RESET_HISTORY[] = "reset_hist";
 static constexpr uint32_t DIAG_RESET_HISTORY_MAX = 20;
 static constexpr uint32_t DIAG_RESET_HISTORY_LEGACY_MAX = 5;
+static constexpr const char* TELEMETRY_DEFAULT_HOST_IPV6 = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static constexpr uint16_t TELEMETRY_DEFAULT_PORT = 55123;
+static constexpr uint32_t TELEMETRY_SEND_TIMEOUT_MS = 200;
+static constexpr uint32_t TELEMETRY_ERROR_LOG_BACKOFF_MS = 60000;
 
 
 // -------------------- Display HW --------------------
@@ -183,6 +191,12 @@ static double gLastNtpCompareDriftSec = NAN;
 static volatile bool gNetTimeValid = false;
 static char gNtpServerIpv6[64] = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
 static char gNtpServerIpv4[64] = "192.168.1.29";
+static bool gTelemetryUdpEnabled = true;
+static char gTelemetryUdpHost[64] = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static uint16_t gTelemetryUdpPort = TELEMETRY_DEFAULT_PORT;
+static uint32_t gTelemetrySeq = 0;
+static uint32_t gTelemetryLastErrorLogMs = 0;
+static uint32_t gTelemetrySuppressedErrors = 0;
 static uint32_t gBootCount = 0;
 static esp_reset_reason_t gPrevResetReason = ESP_RST_UNKNOWN;
 static esp_reset_reason_t gCurrentResetReason = ESP_RST_UNKNOWN;
@@ -192,6 +206,8 @@ static int64_t gCurrentResetEpoch = 0;
 static bool rtc_read_epoch(time_t* out);
 static bool read_system_time_us(int64_t* outUsec);
 static bool read_rtc_epoch_sec(int64_t* outSec);
+static bool read_matter_time_epoch_sec(int64_t* outEpochSec);
+static void get_last_ntp_compare(int64_t* compareEpoch, double* driftSec);
 static void format_epoch_us_utc(int64_t epochSec, int64_t usec, char* out, size_t outLen);
 static int local_utc_offset_minutes_for_epoch(time_t epoch);
 static void format_utc_offset(int offsetMin, char* out, size_t outLen);
@@ -199,6 +215,10 @@ static void log_clock_status_snapshot(const char* context);
 static bool is_network_sync_transaction_active();
 static bool is_commissioned();
 static void log_time_sync_state(const char* reason, bool force);
+static void telemetry_udp_reset_to_default();
+static bool telemetry_udp_set_host(const char* value);
+static bool telemetry_udp_set_port(uint16_t port);
+static void telemetry_udp_emit(const char* reason);
 static int64_t days_from_civil(int32_t year, uint32_t mon, uint32_t day);
 static time_t utc_time_to_epoch(uint16_t year, uint8_t mon, uint8_t day,
                                 uint8_t hour, uint8_t min, uint8_t sec);
@@ -682,6 +702,146 @@ static bool set_ntp_server(char* dst, size_t dstLen, const char* value) {
   if (n >= dstLen) return false;
   strlcpy(dst, value, dstLen);
   return true;
+}
+
+static void telemetry_udp_reset_to_default() {
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  gTelemetryUdpEnabled = true;
+  strlcpy(gTelemetryUdpHost, TELEMETRY_DEFAULT_HOST_IPV6, sizeof(gTelemetryUdpHost));
+  gTelemetryUdpPort = TELEMETRY_DEFAULT_PORT;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+}
+
+static bool telemetry_udp_set_host(const char* value) {
+  if (!value) return false;
+  while (*value == ' ') value++;
+  if (*value == '\0') return false;
+  if (strnlen(value, sizeof(gTelemetryUdpHost)) >= sizeof(gTelemetryUdpHost)) return false;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  strlcpy(gTelemetryUdpHost, value, sizeof(gTelemetryUdpHost));
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  return true;
+}
+
+static bool telemetry_udp_set_port(uint16_t port) {
+  if (port == 0) return false;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  gTelemetryUdpPort = port;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  return true;
+}
+
+static bool telemetry_udp_should_log_error_now() {
+  const uint32_t nowMs = millis_ms();
+  bool logNow = false;
+  uint32_t suppressed = 0;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  if (nowMs - gTelemetryLastErrorLogMs >= TELEMETRY_ERROR_LOG_BACKOFF_MS) {
+    logNow = true;
+    gTelemetryLastErrorLogMs = nowMs;
+    suppressed = gTelemetrySuppressedErrors;
+    gTelemetrySuppressedErrors = 0;
+  } else {
+    gTelemetrySuppressedErrors++;
+  }
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  if (logNow && suppressed > 0) {
+    ESP_LOGW(TAG, "telemetry udp: %lu send errors suppressed during backoff window",
+             (unsigned long)suppressed);
+  }
+  return logNow;
+}
+
+static void telemetry_udp_emit(const char* reason) {
+  if (!reason || reason[0] == '\0') reason = "unspecified";
+
+  bool enabled = false;
+  char host[64] = {};
+  uint16_t port = 0;
+  uint32_t seq = 0;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  enabled = gTelemetryUdpEnabled;
+  strlcpy(host, gTelemetryUdpHost, sizeof(host));
+  port = gTelemetryUdpPort;
+  seq = ++gTelemetrySeq;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  if (!enabled || host[0] == '\0' || port == 0) return;
+
+  int64_t sysUsec = 0;
+  if (!read_system_time_us(&sysUsec)) return;
+  const int64_t txEpochSec = sysUsec / 1000000LL;
+  const int64_t txEpochUsec = sysUsec % 1000000LL;
+
+  int64_t rtcEpochSec = 0;
+  const bool rtcValid = read_rtc_epoch_sec(&rtcEpochSec);
+
+  int64_t lastNtpEpochSec = 0;
+  double lastNtpDriftRtcSec = NAN;
+  get_last_ntp_compare(&lastNtpEpochSec, &lastNtpDriftRtcSec);
+  const bool lastNtpValid = (lastNtpEpochSec > 0);
+  const bool lastNtpDriftValid = isfinite(lastNtpDriftRtcSec);
+
+  int64_t matterEpochSec = 0;
+  const bool matterValid = read_matter_time_epoch_sec(&matterEpochSec);
+
+  char json[384] = {};
+  char rtcField[40] = "null";
+  char ntpEpochField[40] = "null";
+  char ntpDriftField[48] = "null";
+  char matterField[40] = "null";
+
+  if (rtcValid) snprintf(rtcField, sizeof(rtcField), "%" PRId64, rtcEpochSec);
+  if (lastNtpValid) snprintf(ntpEpochField, sizeof(ntpEpochField), "%" PRId64, lastNtpEpochSec);
+  if (lastNtpDriftValid) snprintf(ntpDriftField, sizeof(ntpDriftField), "%.6f", lastNtpDriftRtcSec);
+  if (matterValid) snprintf(matterField, sizeof(matterField), "%" PRId64, matterEpochSec);
+
+  snprintf(json, sizeof(json),
+           "{\"dev\":\"espclock\",\"seq\":%lu,\"tx_epoch_sec\":%" PRId64 ",\"tx_epoch_usec\":%" PRId64
+           ",\"rtc_epoch_sec\":%s,\"last_ntp_epoch_sec\":%s,\"last_ntp_drift_rtc_sec\":%s"
+           ",\"matter_epoch_sec\":%s,\"reason\":\"%s\"}",
+           (unsigned long)seq, txEpochSec, txEpochUsec,
+           rtcField, ntpEpochField, ntpDriftField, matterField, reason);
+
+  char portStr[8] = {};
+  snprintf(portStr, sizeof(portStr), "%u", (unsigned)port);
+  struct addrinfo hints = {};
+  hints.ai_family = AF_INET6;
+  hints.ai_socktype = SOCK_DGRAM;
+  hints.ai_protocol = IPPROTO_UDP;
+
+  struct addrinfo* res = nullptr;
+  const int gai = getaddrinfo(host, portStr, &hints, &res);
+  if (gai != 0 || !res) {
+    if (telemetry_udp_should_log_error_now()) {
+      ESP_LOGW(TAG, "telemetry udp: getaddrinfo failed host=%s port=%u err=%d",
+               host, (unsigned)port, gai);
+    }
+    if (res) freeaddrinfo(res);
+    return;
+  }
+
+  int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+  if (sock < 0) {
+    if (telemetry_udp_should_log_error_now()) {
+      ESP_LOGW(TAG, "telemetry udp: socket create failed errno=%d", errno);
+    }
+    freeaddrinfo(res);
+    return;
+  }
+
+  struct timeval tv = {};
+  tv.tv_sec = 0;
+  tv.tv_usec = TELEMETRY_SEND_TIMEOUT_MS * 1000;
+  (void)setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+  const ssize_t sent = sendto(sock, json, strlen(json), 0, res->ai_addr, res->ai_addrlen);
+  if (sent < 0 && telemetry_udp_should_log_error_now()) {
+    ESP_LOGW(TAG, "telemetry udp: send failed host=%s port=%u errno=%d",
+             host, (unsigned)port, errno);
+  }
+
+  close(sock);
+  freeaddrinfo(res);
 }
 
 // -------------------- Thread / Matter --------------------
@@ -1780,6 +1940,7 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
   do {
     gNetworkSyncTxnActive = true;
     log_clock_status_snapshot("sync-pre");
+    telemetry_udp_emit("sync-pre");
     log_time_sync_state(reason, false);
     if (verboseLogs) {
       ESP_LOGI(TAG, "%s: stage 1/4 start mode=%s timeout=%lu ms reason=%s",
@@ -1974,7 +2135,9 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
   } while (false);
 
   gNetworkSyncTxnActive = false;
-  log_clock_status_snapshot(ok ? "sync-post-ok" : "sync-post-fail");
+  const char* syncContext = ok ? "sync-post-ok" : "sync-post-fail";
+  log_clock_status_snapshot(syncContext);
+  telemetry_udp_emit(syncContext);
   log_time_sync_state(ok ? "sync-finish-ok" : "sync-finish-fail", false);
   if (gRtcSyncMutex) xSemaphoreGive(gRtcSyncMutex);
   return ok;
@@ -2229,6 +2392,12 @@ static void print_serial_help() {
     printf("ntpserver v6 <host|ip> - Set fallback IPv6 NTP server.\n");
     printf("ntpserver v4 <host|ip> - Set fallback IPv4 NTP server.\n");
     printf("ntpserver default - Restore default fallback NTP servers.\n");
+  printf("_______UDP TELEMETRY_________\n");
+    printf("telemetry udp - Show UDP telemetry config/state.\n");
+    printf("telemetry udp host <ipv6|host> - Set UDP destination host.\n");
+    printf("telemetry udp port <1..65535> - Set UDP destination port.\n");
+    printf("telemetry udp on|off - Enable or disable UDP telemetry.\n");
+    printf("telemetry udp default - Restore default telemetry config.\n");
   printf("________DISPLAY DEBUG________\n");
     printf("pwm <1-4095> - Set fixed display PWM brightness.\n");
     printf("pwm auto - Re-enable automatic brightness control.\n");
@@ -2351,9 +2520,60 @@ static void handleDisplaySerialCommands() {
           }
         } else if (strcmp(buf, "ntpserver") == 0) {
           ESP_LOGI(TAG, "NTP servers: v6=%s v4=%s", gNtpServerIpv6, gNtpServerIpv4);
+        } else if (strncmp(buf, "telemetry udp", 13) == 0) {
+          char* p = buf + 13;
+          while (*p == ' ') p++;
+          if (*p == '\0') {
+            bool enabled = false;
+            char host[64] = {};
+            uint16_t port = 0;
+            taskENTER_CRITICAL(&gTimeDiagMux);
+            enabled = gTelemetryUdpEnabled;
+            strlcpy(host, gTelemetryUdpHost, sizeof(host));
+            port = gTelemetryUdpPort;
+            taskEXIT_CRITICAL(&gTimeDiagMux);
+            ESP_LOGI(TAG, "telemetry udp: enabled=%d host=%s port=%u cadence=\"sync-events + 5min\"",
+                     (int)enabled, host, (unsigned)port);
+          } else if (strcmp(p, "on") == 0) {
+            taskENTER_CRITICAL(&gTimeDiagMux);
+            gTelemetryUdpEnabled = true;
+            taskEXIT_CRITICAL(&gTimeDiagMux);
+            ESP_LOGI(TAG, "telemetry udp: enabled");
+          } else if (strcmp(p, "off") == 0) {
+            taskENTER_CRITICAL(&gTimeDiagMux);
+            gTelemetryUdpEnabled = false;
+            taskEXIT_CRITICAL(&gTimeDiagMux);
+            ESP_LOGI(TAG, "telemetry udp: disabled");
+          } else if (strcmp(p, "default") == 0) {
+            telemetry_udp_reset_to_default();
+            ESP_LOGI(TAG, "telemetry udp: reset to default host=%s port=%u",
+                     TELEMETRY_DEFAULT_HOST_IPV6, (unsigned)TELEMETRY_DEFAULT_PORT);
+          } else if (strncmp(p, "host ", 5) == 0) {
+            bool ok = telemetry_udp_set_host(p + 5);
+            if (ok) {
+              char host[64] = {};
+              taskENTER_CRITICAL(&gTimeDiagMux);
+              strlcpy(host, gTelemetryUdpHost, sizeof(host));
+              taskEXIT_CRITICAL(&gTimeDiagMux);
+              ESP_LOGI(TAG, "telemetry udp host set: %s", host);
+            } else {
+              ESP_LOGW(TAG, "telemetry udp host set failed");
+            }
+          } else if (strncmp(p, "port ", 5) == 0) {
+            uint32_t port = (uint32_t)strtoul(p + 5, nullptr, 10);
+            bool ok = (port > 0 && port <= 65535 && telemetry_udp_set_port((uint16_t)port));
+            if (ok) {
+              ESP_LOGI(TAG, "telemetry udp port set: %u", (unsigned)port);
+            } else {
+              ESP_LOGW(TAG, "telemetry udp port set failed");
+            }
+          } else {
+            ESP_LOGW(TAG, "telemetry udp format: telemetry udp [host <value>|port <1..65535>|on|off|default]");
+          }
         } else if (strcmp(buf, "timesync now") == 0) {
           bool ok = run_network_rtc_sync(true, "serial-timesync-now", "RTC sync", true);
           ESP_LOGI(TAG, "Time sync command result: %s", ok ? "SUCCESS" : "FAILURE");
+          telemetry_udp_emit("manual-timesync");
         } else if (strcmp(buf, "ntptest sync") == 0) {
           bool ok = run_ntp_rtc_test(true);
           ESP_LOGI(TAG, "NTP test command result: %s", ok ? "SUCCESS" : "FAILURE");
@@ -2567,6 +2787,7 @@ static void sensor_task(void*) {
       size_t heapBeforeStatusLog = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       uint32_t logWindowMs = now - lastLogMs;
       log_clock_status_snapshot("periodic");
+      telemetry_udp_emit("periodic-5min");
       if (gLogTimeEnabled && (now - lastTimeStateLogMs > 30000)) {
         log_time_sync_state("periodic-soak", false);
         lastTimeStateLogMs = now;
