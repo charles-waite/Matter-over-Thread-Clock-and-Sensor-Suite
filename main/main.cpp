@@ -545,7 +545,7 @@ static void recordBootDiagnostics() {
 static bsec_virtual_sensor_t sensorList[] = {
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY,
-  BSEC_OUTPUT_IAQ,
+  BSEC_OUTPUT_STATIC_IAQ,
   BSEC_OUTPUT_CO2_EQUIVALENT,
 };
 
@@ -620,7 +620,7 @@ static void onBsecOutputs(const bme68xData, const bsecOutputs out, Bsec2) {
     switch (o.sensor_id) {
       case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE: vTempC = o.signal; break;
       case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY: vHum = o.signal; break;
-      case BSEC_OUTPUT_IAQ:
+      case BSEC_OUTPUT_STATIC_IAQ:
         vIAQ = o.signal;
         vIAQacc = o.accuracy;
         break;
@@ -855,9 +855,7 @@ static void configureThreadRouterEligibility() {
   mode.mDeviceType = true;
   mode.mNetworkData = true;
   otThreadSetLinkMode(instance, mode);
-#if OPENTHREAD_FTD
   otThreadSetRouterEligible(instance, true);
-#endif
 #endif
 }
 
@@ -927,6 +925,7 @@ static void request_rtc_sync(const char* reason);
 static void schedule_initial_rtc_sync(const char* reason);
 static void ensure_thread_default_netif(const char* reason);
 static bool is_commissioned();
+static void updateThreadNetworkDiagnostics();
 static void onTimeSyncReady(int64_t utc) {
   if (gLogTimeEnabled) {
     char utcBuf[40] = {};
@@ -936,13 +935,62 @@ static void onTimeSyncReady(int64_t utc) {
   log_time_sync_state("matter-time-ready", false);
 }
 
-static uint8_t co2_to_air_quality_enum(float co2ppm) {
-  if (!isfinite(co2ppm)) return 0;
-  if (co2ppm <= 800.0f) return 1;
-  if (co2ppm <= 1000.0f) return 2;
-  if (co2ppm <= 1500.0f) return 3;
-  if (co2ppm <= 2000.0f) return 4;
-  return 4;
+static void updateThreadNetworkDiagnostics() {
+#if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_ENABLE_MATTER_OVER_THREAD && CONFIG_OPENTHREAD_ENABLED
+  otInstance* instance = esp_openthread_get_instance();
+  if (!instance) return;
+
+  using namespace chip::app::Clusters;
+
+  const char* name = otThreadGetNetworkName(instance);
+  if (name && name[0]) {
+    esp_matter_attr_val_t val = esp_matter_char_str(const_cast<char*>(name), strlen(name));
+    esp_err_t err = esp_matter::attribute::update(
+        0, ThreadNetworkDiagnostics::Id,
+        ThreadNetworkDiagnostics::Attributes::NetworkName::Id, &val);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "Thread diag update: NetworkName failed (%s)", esp_err_to_name(err));
+    }
+  }
+
+  otDeviceRole role = otThreadGetDeviceRole(instance);
+  ThreadNetworkDiagnostics::RoutingRoleEnum routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kUnspecified;
+  if (role == OT_DEVICE_ROLE_DETACHED) {
+    routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kUnassigned;
+  } else if (role == OT_DEVICE_ROLE_ROUTER) {
+    routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kRouter;
+  } else if (role == OT_DEVICE_ROLE_LEADER) {
+    routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kLeader;
+  } else if (role == OT_DEVICE_ROLE_CHILD) {
+    otLinkModeConfig linkMode = otThreadGetLinkMode(instance);
+    if (linkMode.mRxOnWhenIdle) {
+      routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kEndDevice;
+      if (otThreadIsRouterEligible(instance)) {
+        routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kReed;
+      }
+    } else {
+      routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kSleepyEndDevice;
+    }
+  }
+
+  esp_matter_attr_val_t roleVal = esp_matter_enum8((uint8_t)routingRole);
+  esp_err_t roleErr = esp_matter::attribute::update(
+      0, ThreadNetworkDiagnostics::Id,
+      ThreadNetworkDiagnostics::Attributes::RoutingRole::Id, &roleVal);
+  if (roleErr != ESP_OK) {
+    ESP_LOGW(TAG, "Thread diag update: RoutingRole failed (%s)", esp_err_to_name(roleErr));
+  }
+#endif
+}
+
+static uint8_t iaq_to_air_quality_enum(float iaq, uint8_t accuracy) {
+  if (!isfinite(iaq) || accuracy < 1) return 0; // Unknown
+  if (iaq <= 50.0f) return 1;   // Good
+  if (iaq <= 100.0f) return 2;  // Fair
+  if (iaq <= 150.0f) return 3;  // Moderate
+  if (iaq <= 200.0f) return 4;  // Poor
+  if (iaq <= 300.0f) return 5;  // VeryPoor
+  return 6;                     // ExtremelyPoor
 }
 
 static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
@@ -968,6 +1016,7 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
           // Reattach/reconnect path: schedule one grace-delayed correction.
           schedule_initial_rtc_sync("thread-reconnected");
         }
+        updateThreadNetworkDiagnostics();
         log_time_sync_state("matter-thread-established", false);
       } else {
         gThreadAttached = false;
@@ -1071,9 +1120,9 @@ static void matter_update() {
       esp_matter::attribute::update(matterAirEndpoint, CarbonDioxideConcentrationMeasurement::Id,
                                     CarbonDioxideConcentrationMeasurement::Attributes::MeasuredValue::Id, &attr);
     }
-    if (isfinite(vCO2eq)) {
-      uint8_t aq = co2_to_air_quality_enum(vCO2eq);
-      esp_matter_attr_val_t attr = esp_matter_nullable_enum8(nullable<uint8_t>(aq));
+    {
+      uint8_t aq = iaq_to_air_quality_enum(vIAQ, vIAQacc);
+      esp_matter_attr_val_t attr = esp_matter_enum8(aq);
       esp_matter::attribute::update(matterAirEndpoint, AirQuality::Id,
                                     AirQuality::Attributes::AirQuality::Id, &attr);
     }
