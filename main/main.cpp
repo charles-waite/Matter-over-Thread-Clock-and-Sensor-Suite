@@ -4,6 +4,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <time.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netdb.h>
 // For settimeofday
 #include <sys/time.h>
 // -------------------- Time Sync Kill Switch --------------------
@@ -12,6 +16,25 @@
 #if !defined(DISABLE_TIME_SYNC)
 #define DISABLE_TIME_SYNC 0
 #endif
+
+// Compile-time default for verbose time-sync soak logs (`logtime on|off` can
+// override at runtime).
+#if !defined(LOGTIME_DEFAULT)
+#define LOGTIME_DEFAULT 0
+#endif
+
+// Compile-time default for per-section heap diagnostics (`logheap on|off` can
+// override at runtime).
+#if !defined(LOGHEAP_DEFAULT)
+#define LOGHEAP_DEFAULT 0
+#endif
+
+// Set to 1 to include IPv4 NTP fallback attempts. Default is off for
+// Thread-first deployments without IPv4 transport.
+#if !defined(ENABLE_NTP_IPV4_FALLBACK)
+#define ENABLE_NTP_IPV4_FALLBACK 0
+#endif
+
 #define LOG_LOCAL_LEVEL ESP_LOG_INFO
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -88,16 +111,19 @@ static constexpr float TEMP_OFFSET_C = 4.1f;
 static constexpr uint8_t DS3231_ADDR = 0x68;
 static constexpr uint8_t VEML7700_ADDR = 0x10;
 static constexpr const char* LOCAL_TZ = "PST8PDT,M3.2.0/2,M11.1.0/2";
-static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 7UL * 24UL * 60UL * 60UL * 1000UL;
+static constexpr uint32_t RTC_SYNC_INTERVAL_MS = 60UL * 60UL * 1000UL;
+static constexpr uint32_t RTC_SYSTEM_DRIFT_CHECK_MS = 15000UL;
+static constexpr uint32_t RTC_SYSTEM_DRIFT_TRIGGER_COOLDOWN_MS = 60000UL;
+static constexpr time_t RTC_SYSTEM_DRIFT_TRIGGER_SEC = 2;
 static constexpr time_t RTC_VALID_EPOCH = 1700000000; // 2023-11-14
 // Set to false if RTC stores local time instead of UTC.
 static constexpr bool RTC_STORES_UTC = true;
 static constexpr time_t RTC_MAX_DRIFT_SEC = 2;
 static constexpr uint32_t RTC_SYNC_GRACE_MS = 60UL * 1000UL;
-static constexpr const char* NTP_TEST_SERVER_IPV4 = "192.168.1.29";
-static constexpr const char* NTP_TEST_SERVER_IPV6 = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static constexpr const char* NTP_DEFAULT_SERVER_IPV4 = "192.168.1.29";
+static constexpr const char* NTP_DEFAULT_SERVER_IPV6 = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
 static constexpr uint16_t NTP_TEST_PORT = 123;
-static constexpr uint32_t NTP_TEST_TIMEOUT_MS = 20000;
+static constexpr uint32_t NTP_TEST_TIMEOUT_MS = 10000;
 static constexpr time_t NTP_TEST_DRIFT_THRESHOLD_SEC = RTC_MAX_DRIFT_SEC;
 static constexpr int64_t RTC_WRITE_ALIGN_WINDOW_US = 20000;     // 20 ms after second rollover
 static constexpr uint32_t RTC_WRITE_ALIGN_TIMEOUT_MS = 1500;    // wait up to 1.5 s for alignment
@@ -108,6 +134,10 @@ static constexpr char DIAG_KEY_LAST_RESET_EPOCH[] = "last_reset_epoch";
 static constexpr char DIAG_KEY_RESET_HISTORY[] = "reset_hist";
 static constexpr uint32_t DIAG_RESET_HISTORY_MAX = 20;
 static constexpr uint32_t DIAG_RESET_HISTORY_LEGACY_MAX = 5;
+static constexpr const char* TELEMETRY_DEFAULT_HOST_IPV6 = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static constexpr uint16_t TELEMETRY_DEFAULT_PORT = 55123;
+static constexpr uint32_t TELEMETRY_SEND_TIMEOUT_MS = 200;
+static constexpr uint32_t TELEMETRY_ERROR_LOG_BACKOFF_MS = 60000;
 
 
 // -------------------- Display HW --------------------
@@ -159,6 +189,14 @@ static double gLastNtpCompareDriftSec = NAN;
 // NTP fetch results. Auto RTC writes are attempted only through the guarded
 // NTP sync pipeline.
 static volatile bool gNetTimeValid = false;
+static char gNtpServerIpv6[64] = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static char gNtpServerIpv4[64] = "192.168.1.29";
+static bool gTelemetryUdpEnabled = true;
+static char gTelemetryUdpHost[64] = "fd7f:4975:d3c5:4f0a:bc3e:5442:1e1a:1911";
+static uint16_t gTelemetryUdpPort = TELEMETRY_DEFAULT_PORT;
+static uint32_t gTelemetrySeq = 0;
+static uint32_t gTelemetryLastErrorLogMs = 0;
+static uint32_t gTelemetrySuppressedErrors = 0;
 static uint32_t gBootCount = 0;
 static esp_reset_reason_t gPrevResetReason = ESP_RST_UNKNOWN;
 static esp_reset_reason_t gCurrentResetReason = ESP_RST_UNKNOWN;
@@ -168,8 +206,19 @@ static int64_t gCurrentResetEpoch = 0;
 static bool rtc_read_epoch(time_t* out);
 static bool read_system_time_us(int64_t* outUsec);
 static bool read_rtc_epoch_sec(int64_t* outSec);
-static void format_epoch_us_local(int64_t epochSec, int64_t usec, char* out, size_t outLen);
+static bool read_matter_time_epoch_sec(int64_t* outEpochSec);
+static void get_last_ntp_compare(int64_t* compareEpoch, double* driftSec);
+static void format_epoch_us_utc(int64_t epochSec, int64_t usec, char* out, size_t outLen);
+static int local_utc_offset_minutes_for_epoch(time_t epoch);
+static void format_utc_offset(int offsetMin, char* out, size_t outLen);
+static void log_clock_status_snapshot(const char* context);
 static bool is_network_sync_transaction_active();
+static bool is_commissioned();
+static void log_time_sync_state(const char* reason, bool force);
+static void telemetry_udp_reset_to_default();
+static bool telemetry_udp_set_host(const char* value);
+static bool telemetry_udp_set_port(uint16_t port);
+static void telemetry_udp_emit(const char* reason);
 static int64_t days_from_civil(int32_t year, uint32_t mon, uint32_t day);
 static time_t utc_time_to_epoch(uint16_t year, uint8_t mon, uint8_t day,
                                 uint8_t hour, uint8_t min, uint8_t sec);
@@ -225,9 +274,13 @@ static const char* kHeapDiagBucketNames[(size_t)HeapDiagBucket::Count] = {
   "status_log"
 };
 static HeapDiagStats gHeapDiag[(size_t)HeapDiagBucket::Count] = {};
-static bool gHeapDiagEnabled = true;
+static bool gHeapDiagEnabled = (LOGHEAP_DEFAULT != 0);
+static bool gLogTimeEnabled = (LOGTIME_DEFAULT != 0);
 static size_t gHeapDiagLastFree = 0;
 static size_t gHeapDiagLastLargest = 0;
+#if ESP_CLOCK_HAS_USB_SERIAL_JTAG
+static bool gUsbSerialReady = false;
+#endif
 
 static void heap_diag_reset() {
   memset(gHeapDiag, 0, sizeof(gHeapDiag));
@@ -312,6 +365,63 @@ static void formatEpochUtc(int64_t epoch, char* out, size_t outLen) {
   snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d UTC",
            tmUtc.tm_year + 1900, tmUtc.tm_mon + 1, tmUtc.tm_mday,
            tmUtc.tm_hour, tmUtc.tm_min, tmUtc.tm_sec);
+}
+
+static void formatEpochLocal(int64_t epoch, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  if (epoch <= 0) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  time_t t = (time_t)epoch;
+  struct tm tmLocal = {};
+  if (!localtime_r(&t, &tmLocal)) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  char tzAbbr[8] = {};
+  if (strftime(tzAbbr, sizeof(tzAbbr), "%Z", &tmLocal) == 0) {
+    snprintf(tzAbbr, sizeof(tzAbbr), "local");
+  }
+  snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d %s",
+           tmLocal.tm_year + 1900, tmLocal.tm_mon + 1, tmLocal.tm_mday,
+           tmLocal.tm_hour, tmLocal.tm_min, tmLocal.tm_sec, tzAbbr);
+}
+
+static void format_epoch_us_utc(int64_t epochSec, int64_t usec, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  if (epochSec <= 0 || usec < 0) {
+    snprintf(out, outLen, "unknown");
+    return;
+  }
+  char utc[32] = {};
+  formatEpochUtc(epochSec, utc, sizeof(utc));
+  snprintf(out, outLen, "%s.%06" PRId64, utc, usec);
+}
+
+static int local_utc_offset_minutes_for_epoch(time_t epoch) {
+  struct tm tmLocal = {};
+  if (!localtime_r(&epoch, &tmLocal)) return 0;
+  char z[8] = {};
+  if (strftime(z, sizeof(z), "%z", &tmLocal) == 0) return 0;
+  if (z[0] != '+' && z[0] != '-') return 0;
+  if (z[1] < '0' || z[1] > '9' || z[2] < '0' || z[2] > '9' ||
+      z[3] < '0' || z[3] > '9' || z[4] < '0' || z[4] > '9') {
+    return 0;
+  }
+  const int sign = (z[0] == '-') ? -1 : 1;
+  const int hh = ((z[1] - '0') * 10) + (z[2] - '0');
+  const int mm = ((z[3] - '0') * 10) + (z[4] - '0');
+  return sign * ((hh * 60) + mm);
+}
+
+static void format_utc_offset(int offsetMin, char* out, size_t outLen) {
+  if (!out || outLen == 0) return;
+  const int sign = (offsetMin < 0) ? -1 : 1;
+  const int absMin = abs(offsetMin);
+  const int hh = absMin / 60;
+  const int mm = absMin % 60;
+  snprintf(out, outLen, "%c%02d:%02d", (sign < 0) ? '-' : '+', hh, mm);
 }
 
 static void reset_history_append(ResetHistory* hist, const ResetEvent* ev) {
@@ -435,7 +545,7 @@ static void recordBootDiagnostics() {
 static bsec_virtual_sensor_t sensorList[] = {
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE,
   BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY,
-  BSEC_OUTPUT_IAQ,
+  BSEC_OUTPUT_STATIC_IAQ,
   BSEC_OUTPUT_CO2_EQUIVALENT,
 };
 
@@ -510,7 +620,7 @@ static void onBsecOutputs(const bme68xData, const bsecOutputs out, Bsec2) {
     switch (o.sensor_id) {
       case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_TEMPERATURE: vTempC = o.signal; break;
       case BSEC_OUTPUT_SENSOR_HEAT_COMPENSATED_HUMIDITY: vHum = o.signal; break;
-      case BSEC_OUTPUT_IAQ:
+      case BSEC_OUTPUT_STATIC_IAQ:
         vIAQ = o.signal;
         vIAQacc = o.accuracy;
         break;
@@ -579,6 +689,161 @@ static time_t min_valid_epoch() {
   return floor;
 }
 
+static void reset_ntp_servers_to_default() {
+  strlcpy(gNtpServerIpv6, NTP_DEFAULT_SERVER_IPV6, sizeof(gNtpServerIpv6));
+  strlcpy(gNtpServerIpv4, NTP_DEFAULT_SERVER_IPV4, sizeof(gNtpServerIpv4));
+}
+
+static bool set_ntp_server(char* dst, size_t dstLen, const char* value) {
+  if (!dst || dstLen == 0 || !value) return false;
+  while (*value == ' ') value++;
+  if (*value == '\0') return false;
+  size_t n = strnlen(value, dstLen);
+  if (n >= dstLen) return false;
+  strlcpy(dst, value, dstLen);
+  return true;
+}
+
+static void telemetry_udp_reset_to_default() {
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  gTelemetryUdpEnabled = true;
+  strlcpy(gTelemetryUdpHost, TELEMETRY_DEFAULT_HOST_IPV6, sizeof(gTelemetryUdpHost));
+  gTelemetryUdpPort = TELEMETRY_DEFAULT_PORT;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+}
+
+static bool telemetry_udp_set_host(const char* value) {
+  if (!value) return false;
+  while (*value == ' ') value++;
+  if (*value == '\0') return false;
+  if (strnlen(value, sizeof(gTelemetryUdpHost)) >= sizeof(gTelemetryUdpHost)) return false;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  strlcpy(gTelemetryUdpHost, value, sizeof(gTelemetryUdpHost));
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  return true;
+}
+
+static bool telemetry_udp_set_port(uint16_t port) {
+  if (port == 0) return false;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  gTelemetryUdpPort = port;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  return true;
+}
+
+static bool telemetry_udp_should_log_error_now() {
+  const uint32_t nowMs = millis_ms();
+  bool logNow = false;
+  uint32_t suppressed = 0;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  if (nowMs - gTelemetryLastErrorLogMs >= TELEMETRY_ERROR_LOG_BACKOFF_MS) {
+    logNow = true;
+    gTelemetryLastErrorLogMs = nowMs;
+    suppressed = gTelemetrySuppressedErrors;
+    gTelemetrySuppressedErrors = 0;
+  } else {
+    gTelemetrySuppressedErrors++;
+  }
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  if (logNow && suppressed > 0) {
+    ESP_LOGW(TAG, "telemetry udp: %lu send errors suppressed during backoff window",
+             (unsigned long)suppressed);
+  }
+  return logNow;
+}
+
+static void telemetry_udp_emit(const char* reason) {
+  if (!reason || reason[0] == '\0') reason = "unspecified";
+
+  bool enabled = false;
+  char host[64] = {};
+  uint16_t port = 0;
+  uint32_t seq = 0;
+  taskENTER_CRITICAL(&gTimeDiagMux);
+  enabled = gTelemetryUdpEnabled;
+  strlcpy(host, gTelemetryUdpHost, sizeof(host));
+  port = gTelemetryUdpPort;
+  seq = ++gTelemetrySeq;
+  taskEXIT_CRITICAL(&gTimeDiagMux);
+  if (!enabled || host[0] == '\0' || port == 0) return;
+
+  int64_t sysUsec = 0;
+  if (!read_system_time_us(&sysUsec)) return;
+  const int64_t txEpochSec = sysUsec / 1000000LL;
+  const int64_t txEpochUsec = sysUsec % 1000000LL;
+
+  int64_t rtcEpochSec = 0;
+  const bool rtcValid = read_rtc_epoch_sec(&rtcEpochSec);
+
+  int64_t lastNtpEpochSec = 0;
+  double lastNtpDriftRtcSec = NAN;
+  get_last_ntp_compare(&lastNtpEpochSec, &lastNtpDriftRtcSec);
+  const bool lastNtpValid = (lastNtpEpochSec > 0);
+  const bool lastNtpDriftValid = isfinite(lastNtpDriftRtcSec);
+
+  int64_t matterEpochSec = 0;
+  const bool matterValid = read_matter_time_epoch_sec(&matterEpochSec);
+
+  char json[384] = {};
+  char rtcField[40] = "null";
+  char ntpEpochField[40] = "null";
+  char ntpDriftField[48] = "null";
+  char matterField[40] = "null";
+
+  if (rtcValid) snprintf(rtcField, sizeof(rtcField), "%" PRId64, rtcEpochSec);
+  if (lastNtpValid) snprintf(ntpEpochField, sizeof(ntpEpochField), "%" PRId64, lastNtpEpochSec);
+  if (lastNtpDriftValid) snprintf(ntpDriftField, sizeof(ntpDriftField), "%.6f", lastNtpDriftRtcSec);
+  if (matterValid) snprintf(matterField, sizeof(matterField), "%" PRId64, matterEpochSec);
+
+  snprintf(json, sizeof(json),
+           "{\"dev\":\"espclock\",\"seq\":%lu,\"tx_epoch_sec\":%" PRId64 ",\"tx_epoch_usec\":%" PRId64
+           ",\"rtc_epoch_sec\":%s,\"last_ntp_epoch_sec\":%s,\"last_ntp_drift_rtc_sec\":%s"
+           ",\"matter_epoch_sec\":%s,\"reason\":\"%s\"}",
+           (unsigned long)seq, txEpochSec, txEpochUsec,
+           rtcField, ntpEpochField, ntpDriftField, matterField, reason);
+
+  char portStr[8] = {};
+  snprintf(portStr, sizeof(portStr), "%u", (unsigned)port);
+  struct addrinfo hints = {};
+  hints.ai_family = AF_INET6;
+  hints.ai_socktype = SOCK_DGRAM;
+  hints.ai_protocol = IPPROTO_UDP;
+
+  struct addrinfo* res = nullptr;
+  const int gai = getaddrinfo(host, portStr, &hints, &res);
+  if (gai != 0 || !res) {
+    if (telemetry_udp_should_log_error_now()) {
+      ESP_LOGW(TAG, "telemetry udp: getaddrinfo failed host=%s port=%u err=%d",
+               host, (unsigned)port, gai);
+    }
+    if (res) freeaddrinfo(res);
+    return;
+  }
+
+  int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+  if (sock < 0) {
+    if (telemetry_udp_should_log_error_now()) {
+      ESP_LOGW(TAG, "telemetry udp: socket create failed errno=%d", errno);
+    }
+    freeaddrinfo(res);
+    return;
+  }
+
+  struct timeval tv = {};
+  tv.tv_sec = 0;
+  tv.tv_usec = TELEMETRY_SEND_TIMEOUT_MS * 1000;
+  (void)setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+
+  const ssize_t sent = sendto(sock, json, strlen(json), 0, res->ai_addr, res->ai_addrlen);
+  if (sent < 0 && telemetry_udp_should_log_error_now()) {
+    ESP_LOGW(TAG, "telemetry udp: send failed host=%s port=%u errno=%d",
+             host, (unsigned)port, errno);
+  }
+
+  close(sock);
+  freeaddrinfo(res);
+}
+
 // -------------------- Thread / Matter --------------------
 static void configureThreadRouterEligibility() {
 #if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_ENABLE_MATTER_OVER_THREAD && CONFIG_OPENTHREAD_ENABLED
@@ -590,9 +855,7 @@ static void configureThreadRouterEligibility() {
   mode.mDeviceType = true;
   mode.mNetworkData = true;
   otThreadSetLinkMode(instance, mode);
-#if OPENTHREAD_FTD
   otThreadSetRouterEligible(instance, true);
-#endif
 #endif
 }
 
@@ -662,17 +925,72 @@ static void request_rtc_sync(const char* reason);
 static void schedule_initial_rtc_sync(const char* reason);
 static void ensure_thread_default_netif(const char* reason);
 static bool is_commissioned();
+static void updateThreadNetworkDiagnostics();
 static void onTimeSyncReady(int64_t utc) {
-  ESP_LOGI(TAG, "Matter time sync ready (epoch=%" PRId64 ")", utc);
+  if (gLogTimeEnabled) {
+    char utcBuf[40] = {};
+    formatEpochUtc(utc, utcBuf, sizeof(utcBuf));
+    ESP_LOGI(TAG, "logtime: Matter time sync callback ready (epoch=%" PRId64 " utc=\"%s\")", utc, utcBuf);
+  }
+  log_time_sync_state("matter-time-ready", false);
 }
 
-static uint8_t co2_to_air_quality_enum(float co2ppm) {
-  if (!isfinite(co2ppm)) return 0;
-  if (co2ppm <= 800.0f) return 1;
-  if (co2ppm <= 1000.0f) return 2;
-  if (co2ppm <= 1500.0f) return 3;
-  if (co2ppm <= 2000.0f) return 4;
-  return 4;
+static void updateThreadNetworkDiagnostics() {
+#if ESP_CLOCK_HAS_OPENTHREAD && CONFIG_ENABLE_MATTER_OVER_THREAD && CONFIG_OPENTHREAD_ENABLED
+  otInstance* instance = esp_openthread_get_instance();
+  if (!instance) return;
+
+  using namespace chip::app::Clusters;
+
+  const char* name = otThreadGetNetworkName(instance);
+  if (name && name[0]) {
+    esp_matter_attr_val_t val = esp_matter_char_str(const_cast<char*>(name), strlen(name));
+    esp_err_t err = esp_matter::attribute::update(
+        0, ThreadNetworkDiagnostics::Id,
+        ThreadNetworkDiagnostics::Attributes::NetworkName::Id, &val);
+    if (err != ESP_OK) {
+      ESP_LOGW(TAG, "Thread diag update: NetworkName failed (%s)", esp_err_to_name(err));
+    }
+  }
+
+  otDeviceRole role = otThreadGetDeviceRole(instance);
+  ThreadNetworkDiagnostics::RoutingRoleEnum routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kUnspecified;
+  if (role == OT_DEVICE_ROLE_DETACHED) {
+    routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kUnassigned;
+  } else if (role == OT_DEVICE_ROLE_ROUTER) {
+    routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kRouter;
+  } else if (role == OT_DEVICE_ROLE_LEADER) {
+    routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kLeader;
+  } else if (role == OT_DEVICE_ROLE_CHILD) {
+    otLinkModeConfig linkMode = otThreadGetLinkMode(instance);
+    if (linkMode.mRxOnWhenIdle) {
+      routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kEndDevice;
+      if (otThreadIsRouterEligible(instance)) {
+        routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kReed;
+      }
+    } else {
+      routingRole = ThreadNetworkDiagnostics::RoutingRoleEnum::kSleepyEndDevice;
+    }
+  }
+
+  esp_matter_attr_val_t roleVal = esp_matter_enum8((uint8_t)routingRole);
+  esp_err_t roleErr = esp_matter::attribute::update(
+      0, ThreadNetworkDiagnostics::Id,
+      ThreadNetworkDiagnostics::Attributes::RoutingRole::Id, &roleVal);
+  if (roleErr != ESP_OK) {
+    ESP_LOGW(TAG, "Thread diag update: RoutingRole failed (%s)", esp_err_to_name(roleErr));
+  }
+#endif
+}
+
+static uint8_t iaq_to_air_quality_enum(float iaq, uint8_t accuracy) {
+  if (!isfinite(iaq) || accuracy < 1) return 0; // Unknown
+  if (iaq <= 50.0f) return 1;   // Good
+  if (iaq <= 100.0f) return 2;  // Fair
+  if (iaq <= 150.0f) return 3;  // Moderate
+  if (iaq <= 200.0f) return 4;  // Poor
+  if (iaq <= 300.0f) return 5;  // VeryPoor
+  return 6;                     // ExtremelyPoor
 }
 
 static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
@@ -682,6 +1000,7 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
       ESP_LOGI(TAG, "Matter commissioning complete");
       gCommissioned = true;
       schedule_initial_rtc_sync("commissioning-complete");
+      log_time_sync_state("matter-commissioning-complete", false);
       break;
     case chip::DeviceLayer::DeviceEventType::kCommissioningSessionStarted:
       ESP_LOGI(TAG, "Matter commissioning session started");
@@ -697,8 +1016,11 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
           // Reattach/reconnect path: schedule one grace-delayed correction.
           schedule_initial_rtc_sync("thread-reconnected");
         }
+        updateThreadNetworkDiagnostics();
+        log_time_sync_state("matter-thread-established", false);
       } else {
         gThreadAttached = false;
+        log_time_sync_state("matter-thread-lost", false);
       }
       break;
     case chip::DeviceLayer::DeviceEventType::kOperationalNetworkEnabled:
@@ -798,9 +1120,9 @@ static void matter_update() {
       esp_matter::attribute::update(matterAirEndpoint, CarbonDioxideConcentrationMeasurement::Id,
                                     CarbonDioxideConcentrationMeasurement::Attributes::MeasuredValue::Id, &attr);
     }
-    if (isfinite(vCO2eq)) {
-      uint8_t aq = co2_to_air_quality_enum(vCO2eq);
-      esp_matter_attr_val_t attr = esp_matter_nullable_enum8(nullable<uint8_t>(aq));
+    {
+      uint8_t aq = iaq_to_air_quality_enum(vIAQ, vIAQacc);
+      esp_matter_attr_val_t attr = esp_matter_enum8(aq);
       esp_matter::attribute::update(matterAirEndpoint, AirQuality::Id,
                                     AirQuality::Attributes::AirQuality::Id, &attr);
     }
@@ -1322,29 +1644,186 @@ static bool read_rtc_epoch_sec(int64_t* outSec) {
   return true;
 }
 
-static void formatEpochLocal(int64_t epoch, char* out, size_t outLen) {
-  if (!out || outLen == 0) return;
-  if (epoch <= 0) {
-    snprintf(out, outLen, "unknown");
-    return;
-  }
-  time_t t = (time_t)epoch;
-  struct tm tmLocal = {};
-  localtime_r(&t, &tmLocal);
-  snprintf(out, outLen, "%04d-%02d-%02d %02d:%02d:%02d",
-           tmLocal.tm_year + 1900, tmLocal.tm_mon + 1, tmLocal.tm_mday,
-           tmLocal.tm_hour, tmLocal.tm_min, tmLocal.tm_sec);
+static bool read_matter_time_epoch_sec(int64_t* outEpochSec) {
+  if (!outEpochSec) return false;
+#if !DISABLE_TIME_SYNC
+  return time_sync_now_utc(outEpochSec);
+#else
+  return false;
+#endif
 }
 
-static void format_epoch_us_local(int64_t epochSec, int64_t usec, char* out, size_t outLen) {
-  if (!out || outLen == 0) return;
-  if (epochSec <= 0 || usec < 0) {
-    snprintf(out, outLen, "unknown");
-    return;
+static void log_time_sync_state(const char* reason, bool force) {
+  if (!force && !gLogTimeEnabled) return;
+
+  int64_t rtcEpoch = 0;
+  int64_t sysUsec = 0;
+  int64_t matterEpoch = 0;
+  bool rtcValid = read_rtc_epoch_sec(&rtcEpoch);
+  bool sysValid = read_system_time_us(&sysUsec);
+  bool matterValid = read_matter_time_epoch_sec(&matterEpoch);
+
+  const int64_t sysEpoch = sysValid ? (sysUsec / 1000000LL) : 0;
+  const time_t floorEpoch = min_valid_epoch();
+  const time_t offsetEpochBase = sysValid ? (time_t)sysEpoch : time(nullptr);
+  const int utcToLocalOffsetMin = local_utc_offset_minutes_for_epoch(offsetEpochBase);
+  char utcOffset[16] = {};
+  format_utc_offset(utcToLocalOffsetMin, utcOffset, sizeof(utcOffset));
+
+  char floorUtc[40] = {};
+  char rtcUtc[40] = {};
+  char sysUtc[40] = {};
+  char matterUtc[40] = {};
+  formatEpochUtc((int64_t)floorEpoch, floorUtc, sizeof(floorUtc));
+  formatEpochUtc(rtcValid ? rtcEpoch : 0, rtcUtc, sizeof(rtcUtc));
+  formatEpochUtc(sysValid ? sysEpoch : 0, sysUtc, sizeof(sysUtc));
+  formatEpochUtc(matterValid ? matterEpoch : 0, matterUtc, sizeof(matterUtc));
+
+  double driftMatterRtc = NAN;
+  double driftMatterSys = NAN;
+  if (matterValid && rtcValid) driftMatterRtc = (double)matterEpoch - (double)rtcEpoch;
+  if (matterValid && sysValid) driftMatterSys = (double)matterEpoch - (double)sysEpoch;
+
+  ESP_LOGI(TAG,
+           "TIME_SYNC_STATE reason=%s commissioned=%d thread=%d net_valid=%d tx_active=%d "
+           "interval_s=%lu floor_epoch=%ld floor_utc=\"%s\" rtc_epoch=%" PRId64 " rtc_utc=\"%s\" "
+           "sys_epoch=%" PRId64 " sys_utc=\"%s\" matter_epoch=%" PRId64 " matter_utc=\"%s\" "
+           "utc_to_local_apply=\"%s\" utc_to_local_offset_min=%d drift_matter_rtc_sec=%.3f "
+           "drift_matter_sys_sec=%.3f ntp_v6=%s ntp_v4=%s",
+           reason ? reason : "n/a",
+           (int)(gCommissioned || is_commissioned()),
+           (int)gThreadAttached,
+           (int)gNetTimeValid,
+           (int)is_network_sync_transaction_active(),
+           (unsigned long)(gRtcSyncIntervalMs / 1000UL),
+           (long)floorEpoch,
+           floorUtc,
+           rtcValid ? rtcEpoch : 0,
+           rtcUtc,
+           sysValid ? sysEpoch : 0,
+           sysUtc,
+           matterValid ? matterEpoch : 0,
+           matterUtc,
+           utcOffset,
+           utcToLocalOffsetMin,
+           driftMatterRtc,
+           driftMatterSys,
+           gNtpServerIpv6,
+           gNtpServerIpv4);
+}
+
+static void log_clock_status_snapshot(const char* context) {
+  ClockTime ct = readClockTime();
+  int h12 = ct.hour % 12;
+  if (h12 == 0) h12 = 12;
+  int year = 0;
+  int mon = 0;
+  int day = 0;
+  time_t rtcEpoch = 0;
+  bool rtcEpochValid = false;
+  char rtcUtc[40] = {};
+  char rtcLocal[48] = {};
+  if (rtc_read_epoch(&rtcEpoch)) {
+    rtcEpochValid = true;
+    struct tm tmUtc = {};
+    gmtime_r(&rtcEpoch, &tmUtc);
+    year = tmUtc.tm_year + 1900;
+    mon = tmUtc.tm_mon + 1;
+    day = tmUtc.tm_mday;
+    formatEpochUtc((int64_t)rtcEpoch, rtcUtc, sizeof(rtcUtc));
+    formatEpochLocal((int64_t)rtcEpoch, rtcLocal, sizeof(rtcLocal));
+  } else {
+    snprintf(rtcUtc, sizeof(rtcUtc), "unknown");
+    snprintf(rtcLocal, sizeof(rtcLocal), "unknown");
   }
-  char local[32] = {};
-  formatEpochLocal(epochSec, local, sizeof(local));
-  snprintf(out, outLen, "%s.%06" PRId64, local, usec);
+  time_t sysEpoch = time(nullptr);
+  struct tm sysUtcTm = {};
+  gmtime_r(&sysEpoch, &sysUtcTm);
+  char sysUtc[40] = {};
+  formatEpochUtc((int64_t)sysEpoch, sysUtc, sizeof(sysUtc));
+  const int utcToLocalOffsetMin = local_utc_offset_minutes_for_epoch(sysEpoch);
+  char utcOffset[16] = {};
+  format_utc_offset(utcToLocalOffsetMin, utcOffset, sizeof(utcOffset));
+  char tempBuf[16] = "nan";
+  char rhBuf[16] = "nan";
+  if (isfinite(vTempC)) {
+    int tempTenthsF = (int)lroundf((vTempC * 9.0f / 5.0f + 32.0f) * 10.0f);
+    int tempWhole = tempTenthsF / 10;
+    int tempFrac = abs(tempTenthsF % 10);
+    snprintf(tempBuf, sizeof(tempBuf), "%d.%d", tempWhole, tempFrac);
+  }
+  if (isfinite(vHum)) {
+    int rhTenths = (int)lroundf(vHum * 10.0f);
+    int rhWhole = rhTenths / 10;
+    int rhFrac = abs(rhTenths % 10);
+    snprintf(rhBuf, sizeof(rhBuf), "%d.%d", rhWhole, rhFrac);
+  }
+  ESP_LOGI(TAG, "CLOCK_STATUS context=%s rtc_utc=\"%s\" rtc_date_utc=%04d-%02d-%02d display_12h=%02d:%02d:%02u(%s) display_24h=%02u:%02u:%02u sys_utc=\"%s\" sys_utc_hms=%02d:%02d:%02d utc_to_local_apply=\"%s\" utc_to_local_offset_min=%d temp_f=%s rh_pct=%s",
+           context ? context : "n/a",
+           rtcUtc,
+           year, mon, day,
+           h12, ct.minute, ct.second, ct.pm ? "PM" : "AM",
+           ct.hour, ct.minute, ct.second,
+           sysUtc,
+           sysUtcTm.tm_hour, sysUtcTm.tm_min, sysUtcTm.tm_sec,
+           utcOffset, utcToLocalOffsetMin,
+           tempBuf, rhBuf);
+  double lastCompareDriftSec = NAN;
+  int64_t lastCompareEpoch = 0;
+  get_last_ntp_compare(&lastCompareEpoch, &lastCompareDriftSec);
+  int64_t matterEpoch = 0;
+  bool matterValid = read_matter_time_epoch_sec(&matterEpoch);
+  double matterDriftSec = (matterValid && rtcEpochValid) ? ((double)matterEpoch - (double)rtcEpoch) : NAN;
+  double daysAgo = NAN;
+  int32_t daysWhole = 0;
+  int32_t daysFrac = 0;
+  if (lastCompareEpoch > 0) {
+    daysAgo = ((double)sysEpoch - (double)lastCompareEpoch) / 86400.0;
+    if (daysAgo < 0.0) daysAgo = 0.0;
+    int32_t daysAgo100 = (int32_t)lround(daysAgo * 100.0);
+    daysWhole = daysAgo100 / 100;
+    daysFrac = abs(daysAgo100 % 100);
+  }
+  char ntpAgeText[32] = "never";
+  if (lastCompareEpoch > 0) {
+    int64_t ageSec = (int64_t)sysEpoch - lastCompareEpoch;
+    if (ageSec < 0) ageSec = 0;
+    int64_t ageH = ageSec / 3600LL;
+    int64_t ageM = (ageSec % 3600LL) / 60LL;
+    int64_t ageS = ageSec % 60LL;
+    snprintf(ntpAgeText, sizeof(ntpAgeText), "%02lld:%02lld:%02lld ago",
+             (long long)ageH, (long long)ageM, (long long)ageS);
+  }
+
+  char ntpDriftText[80] = "unavailable";
+  if (isfinite(lastCompareDriftSec)) {
+    int32_t driftMs = (int32_t)lround(fabs(lastCompareDriftSec) * 1000.0);
+    int32_t driftWhole = driftMs / 1000;
+    int32_t driftFrac = abs(driftMs % 1000);
+    snprintf(ntpDriftText, sizeof(ntpDriftText), "%ld.%03ld sec (%s)",
+             (long)driftWhole, (long)driftFrac,
+             (lastCompareDriftSec >= 0.0) ? "RTC behind NTP" : "RTC ahead of NTP");
+  }
+
+  char matterDriftText[80] = "unavailable";
+  if (isfinite(matterDriftSec)) {
+    int32_t matterMs = (int32_t)lround(fabs(matterDriftSec) * 1000.0);
+    int32_t matterWhole = matterMs / 1000;
+    int32_t matterFrac = abs(matterMs % 1000);
+    snprintf(matterDriftText, sizeof(matterDriftText), "%ld.%03ld sec (%s)",
+             (long)matterWhole, (long)matterFrac,
+             (matterDriftSec >= 0.0) ? "RTC behind Matter" : "RTC ahead of Matter");
+  }
+
+  if (lastCompareEpoch > 0) {
+    ESP_LOGI(TAG,
+             "Last NTP/Matter compare %ld.%02ld days ago | Current RTC Local = %s | RTC->NTP drift = %s (last checked %s) | RTC->Matter drift = %s",
+             (long)daysWhole, (long)daysFrac, rtcLocal, ntpDriftText, ntpAgeText, matterDriftText);
+  } else {
+    ESP_LOGI(TAG,
+             "Last NTP/Matter compare none yet | Current RTC Local = %s | RTC->NTP drift = %s (last checked %s) | RTC->Matter drift = %s",
+             rtcLocal, ntpDriftText, ntpAgeText, matterDriftText);
+  }
 }
 
 typedef struct {
@@ -1443,6 +1922,13 @@ static bool ntp_fetch_one_shot(const char* server, uint32_t timeoutMs, struct ti
   }
 
   gettimeofday(outTv, nullptr);
+  time_t floor = min_valid_epoch();
+  if (outTv->tv_sec < floor) {
+    ESP_LOGW(TAG, "%s: fetched epoch=%" PRId64 " below validity floor=%ld (server=%s)",
+             prefix, (int64_t)outTv->tv_sec, (long)floor, server);
+    esp_netif_sntp_deinit();
+    return false;
+  }
   if (outSysUsecAtFetch) {
     (void)read_system_time_us(outSysUsecAtFetch);
   }
@@ -1452,6 +1938,41 @@ static bool ntp_fetch_one_shot(const char* server, uint32_t timeoutMs, struct ti
            server, (int64_t)outTv->tv_sec, (long)outTv->tv_usec, (unsigned long long)elapsed);
   esp_netif_sntp_deinit();
   return true;
+}
+
+static bool matter_fetch_one_shot(struct timeval* outTv, int64_t* outSysUsecAtFetch, const char* prefix) {
+#if !DISABLE_TIME_SYNC
+  if (!outTv) return false;
+  if (!prefix) prefix = "RTC sync";
+  int64_t utc = 0;
+  if (!time_sync_now_utc(&utc)) {
+    if (gLogTimeEnabled) {
+      ESP_LOGI(TAG, "logtime: %s Matter time unavailable (time_sync_now_utc=false)", prefix);
+    }
+    return false;
+  }
+  time_t floor = min_valid_epoch();
+  if (utc < (int64_t)floor) {
+    if (gLogTimeEnabled) {
+      ESP_LOGW(TAG, "logtime: %s Matter time epoch=%" PRId64 " below validity floor=%ld", prefix, utc, (long)floor);
+    }
+    return false;
+  }
+  outTv->tv_sec = (time_t)utc;
+  outTv->tv_usec = 0;
+  if (outSysUsecAtFetch) {
+    (void)read_system_time_us(outSysUsecAtFetch);
+  }
+  if (gLogTimeEnabled) {
+    ESP_LOGI(TAG, "logtime: %s Matter time fetch success epoch=%" PRId64, prefix, utc);
+  }
+  return true;
+#else
+  (void)outTv;
+  (void)outSysUsecAtFetch;
+  (void)prefix;
+  return false;
+#endif
 }
 
 static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char* prefix, bool verboseLogs) {
@@ -1467,6 +1988,9 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
   bool ok = false;
   do {
     gNetworkSyncTxnActive = true;
+    log_clock_status_snapshot("sync-pre");
+    telemetry_udp_emit("sync-pre");
+    log_time_sync_state(reason, false);
     if (verboseLogs) {
       ESP_LOGI(TAG, "%s: stage 1/4 start mode=%s timeout=%lu ms reason=%s",
                prefix, allowWrite ? "compare+sync" : "compare-only",
@@ -1485,10 +2009,10 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     if (m.rtcBeforeValid) {
       m.rtcBeforeSec = rtcBefore;
       if (verboseLogs) {
-        char rtcLocal[32] = {};
-        formatEpochLocal(m.rtcBeforeSec, rtcLocal, sizeof(rtcLocal));
-        ESP_LOGI(TAG, "%s: stage 2/4 RTC precheck epoch=%" PRId64 " local=%s",
-                 prefix, m.rtcBeforeSec, rtcLocal);
+        char rtcUtc[40] = {};
+        formatEpochUtc(m.rtcBeforeSec, rtcUtc, sizeof(rtcUtc));
+        ESP_LOGI(TAG, "%s: stage 2/4 RTC precheck epoch=%" PRId64 " utc=%s",
+                 prefix, m.rtcBeforeSec, rtcUtc);
       }
     } else {
       ESP_LOGW(TAG, "%s: RTC precheck failed (unreadable)", prefix);
@@ -1496,11 +2020,22 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
 
     struct timeval tv = {};
     int64_t sysUsecAtFetch = 0;
-    const char* servers[] = {NTP_TEST_SERVER_IPV6, NTP_TEST_SERVER_IPV4};
-    for (size_t i = 0; i < (sizeof(servers) / sizeof(servers[0])); ++i) {
+    const char* servers[2] = {};
+    size_t serverCount = 0;
+    if (gNtpServerIpv6[0] != '\0') {
+      servers[serverCount++] = gNtpServerIpv6;
+    }
+#if ENABLE_NTP_IPV4_FALLBACK
+    if (gNtpServerIpv4[0] != '\0') {
+      servers[serverCount++] = gNtpServerIpv4;
+    }
+#endif
+    const size_t totalAttempts = serverCount + 1; // + Matter fallback
+    for (size_t i = 0; i < serverCount; ++i) {
+      if (!servers[i] || servers[i][0] == '\0') continue;
       if (verboseLogs) {
-        ESP_LOGI(TAG, "%s: stage 3/4 attempt %u/%u server=%s",
-                 prefix, (unsigned)(i + 1), (unsigned)(sizeof(servers) / sizeof(servers[0])), servers[i]);
+        ESP_LOGI(TAG, "%s: stage 3/4 attempt %u/%u source=NTP server=%s",
+                 prefix, (unsigned)(i + 1), (unsigned)totalAttempts, servers[i]);
       }
       if (ntp_fetch_one_shot(servers[i], NTP_TEST_TIMEOUT_MS, &tv, &sysUsecAtFetch, prefix)) {
         m.fetched = true;
@@ -1509,7 +2044,27 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
         m.ntpUsec = (int64_t)tv.tv_usec;
         m.sysAtFetchSec = sysUsecAtFetch / 1000000LL;
         m.sysAtFetchUsec = sysUsecAtFetch % 1000000LL;
+        if (gLogTimeEnabled) {
+          ESP_LOGI(TAG, "logtime: %s selected source=ntp server=%s", prefix, servers[i]);
+        }
         break;
+      }
+    }
+    if (!m.fetched) {
+      if (verboseLogs) {
+        ESP_LOGI(TAG, "%s: stage 3/4 attempt %u/%u source=Matter-Time-Sync",
+                 prefix, (unsigned)(serverCount + 1), (unsigned)totalAttempts);
+      }
+      if (matter_fetch_one_shot(&tv, &sysUsecAtFetch, prefix)) {
+        m.fetched = true;
+        m.sourceServer = "matter-time-sync";
+        m.ntpEpochSec = (int64_t)tv.tv_sec;
+        m.ntpUsec = (int64_t)tv.tv_usec;
+        m.sysAtFetchSec = sysUsecAtFetch / 1000000LL;
+        m.sysAtFetchUsec = sysUsecAtFetch % 1000000LL;
+        if (gLogTimeEnabled) {
+          ESP_LOGI(TAG, "logtime: %s selected source=matter-time-sync (NTP unavailable)", prefix);
+        }
       }
     }
 
@@ -1520,10 +2075,10 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     }
     gNetTimeValid = true;
     if (verboseLogs) {
-      char ntpLocalUs[48] = {};
-      format_epoch_us_local(m.ntpEpochSec, m.ntpUsec, ntpLocalUs, sizeof(ntpLocalUs));
-      ESP_LOGI(TAG, "%s: stage 4/4 NTP sample source=%s local=%s",
-               prefix, m.sourceServer, ntpLocalUs);
+      char ntpUtcUs[56] = {};
+      format_epoch_us_utc(m.ntpEpochSec, m.ntpUsec, ntpUtcUs, sizeof(ntpUtcUs));
+      ESP_LOGI(TAG, "%s: stage 4/4 NTP sample source=%s utc=%s",
+               prefix, m.sourceServer, ntpUtcUs);
     }
 
     const double ntpContinuousSec = (double)m.ntpEpochSec + ((double)m.ntpUsec / 1000000.0);
@@ -1598,6 +2153,9 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
     if (m.rtcAfterValid) {
       m.rtcAfterSec = rtcAfter;
       m.driftRtcAfterSec = sysContinuousAfterSec - (double)m.rtcAfterSec;
+      // Persist the latest observed drift after sync/no-sync decision so
+      // "Last NTP compare" reflects post-check state.
+      set_last_ntp_compare(m.ntpEpochSec, m.driftRtcAfterSec);
       ESP_LOGI(TAG,
                "SYNC_METRIC reason=%s phase=post source=%s ntp_epoch=%" PRId64 " ntp_usec=%" PRId64
                " sys_epoch=%" PRId64 " sys_usec=%" PRId64 " rtc_epoch=%" PRId64
@@ -1626,6 +2184,10 @@ static bool run_network_rtc_sync(bool allowWrite, const char* reason, const char
   } while (false);
 
   gNetworkSyncTxnActive = false;
+  const char* syncContext = ok ? "sync-post-ok" : "sync-post-fail";
+  log_clock_status_snapshot(syncContext);
+  telemetry_udp_emit(syncContext);
+  log_time_sync_state(ok ? "sync-finish-ok" : "sync-finish-fail", false);
   if (gRtcSyncMutex) xSemaphoreGive(gRtcSyncMutex);
   return ok;
 }
@@ -1709,7 +2271,7 @@ static void rtc_time_sync_task(void*) {
         gRtcInitialSyncDue = false;
       }
     } else {
-      run_network_rtc_sync(true, "periodic-weekly", "RTC sync", false);
+      run_network_rtc_sync(true, "periodic-hourly", "RTC sync", false);
     }
     ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(gRtcSyncIntervalMs));
   }
@@ -1859,6 +2421,7 @@ static void print_serial_help() {
   printf("________RUNTIME DEBUG________\n");
     printf("help - Show this command list.\n");
     printf("loginfo on|off - Set esp_clock log level at runtime.\n");
+    printf("logtime on|off - Control verbose Matter/NTP time-sync soak logs.\n");
     printf("logheap on|off|reset - Control per-section heap diagnostics.\n");
     printf("rebootcause - Print previous/current reset reason.\n");
     printf("reboothistory - Print stored reset history ring.\n");
@@ -1874,6 +2437,16 @@ static void print_serial_help() {
   printf("__________NTP DEBUG__________\n");
     printf("ntptest - Run compare-only NTP vs RTC test.\n");
     printf("ntptest sync - Run NTP test and sync RTC if needed.\n");
+    printf("ntpserver - Show configured fallback NTP servers.\n");
+    printf("ntpserver v6 <host|ip> - Set fallback IPv6 NTP server.\n");
+    printf("ntpserver v4 <host|ip> - Set fallback IPv4 NTP server.\n");
+    printf("ntpserver default - Restore default fallback NTP servers.\n");
+  printf("_______UDP TELEMETRY_________\n");
+    printf("telemetry udp - Show UDP telemetry config/state.\n");
+    printf("telemetry udp host <ipv6|host> - Set UDP destination host.\n");
+    printf("telemetry udp port <1..65535> - Set UDP destination port.\n");
+    printf("telemetry udp on|off - Enable or disable UDP telemetry.\n");
+    printf("telemetry udp default - Restore default telemetry config.\n");
   printf("________DISPLAY DEBUG________\n");
     printf("pwm <1-4095> - Set fixed display PWM brightness.\n");
     printf("pwm auto - Re-enable automatic brightness control.\n");
@@ -1886,11 +2459,17 @@ static void handleDisplaySerialCommands() {
   static char buf[64];
   static size_t idx = 0;
   uint8_t ch;
+  while (true) {
+    bool got = false;
 #if ESP_CLOCK_HAS_USB_SERIAL_JTAG
-  while (usb_serial_jtag_read_bytes(&ch, 1, 0) == 1) {
-#else
-  while (uart_read_bytes(UART_NUM_0, &ch, 1, 0) == 1) {
+    if (gUsbSerialReady && usb_serial_jtag_read_bytes(&ch, 1, 0) == 1) {
+      got = true;
+    }
 #endif
+    if (!got && uart_read_bytes(UART_NUM_0, &ch, 1, 0) == 1) {
+      got = true;
+    }
+    if (!got) break;
     if (ch == '\n' || ch == '\r') {
       buf[idx] = '\0';
       if (idx > 0) {
@@ -1902,6 +2481,12 @@ static void handleDisplaySerialCommands() {
         } else if (strncmp(buf, "loginfo off", 11) == 0) {
           esp_log_level_set(TAG, ESP_LOG_ERROR);
           printf("esp_clock log level: ERROR\n");
+        } else if (strcmp(buf, "logtime on") == 0) {
+          gLogTimeEnabled = true;
+          ESP_LOGI(TAG, "logtime: enabled");
+        } else if (strcmp(buf, "logtime off") == 0) {
+          gLogTimeEnabled = false;
+          ESP_LOGI(TAG, "logtime: disabled");
         } else if (strcmp(buf, "logheap on") == 0 || strcmp(buf, "heapdiag on") == 0) {
           gHeapDiagEnabled = true;
           gHeapDiagLastFree = heap_caps_get_free_size(MALLOC_CAP_8BIT);
@@ -1967,9 +2552,77 @@ static void handleDisplaySerialCommands() {
           } else {
             ESP_LOGW(TAG, "RTC read failed");
           }
+        } else if (strncmp(buf, "ntpserver ", 10) == 0) {
+          char* p = buf + 10;
+          while (*p == ' ') p++;
+          if (strcmp(p, "default") == 0) {
+            reset_ntp_servers_to_default();
+            ESP_LOGI(TAG, "NTP servers reset to defaults: v6=%s v4=%s", gNtpServerIpv6, gNtpServerIpv4);
+          } else if (strncmp(p, "v6 ", 3) == 0) {
+            bool ok = set_ntp_server(gNtpServerIpv6, sizeof(gNtpServerIpv6), p + 3);
+            ESP_LOGI(TAG, "NTP v6 server set: %s", ok ? gNtpServerIpv6 : "FAILED");
+          } else if (strncmp(p, "v4 ", 3) == 0) {
+            bool ok = set_ntp_server(gNtpServerIpv4, sizeof(gNtpServerIpv4), p + 3);
+            ESP_LOGI(TAG, "NTP v4 server set: %s", ok ? gNtpServerIpv4 : "FAILED");
+          } else {
+            ESP_LOGW(TAG, "NTP server format: ntpserver v6 <host|ip> | ntpserver v4 <host|ip> | ntpserver default");
+          }
+        } else if (strcmp(buf, "ntpserver") == 0) {
+          ESP_LOGI(TAG, "NTP servers: v6=%s v4=%s", gNtpServerIpv6, gNtpServerIpv4);
+        } else if (strncmp(buf, "telemetry udp", 13) == 0) {
+          char* p = buf + 13;
+          while (*p == ' ') p++;
+          if (*p == '\0') {
+            bool enabled = false;
+            char host[64] = {};
+            uint16_t port = 0;
+            taskENTER_CRITICAL(&gTimeDiagMux);
+            enabled = gTelemetryUdpEnabled;
+            strlcpy(host, gTelemetryUdpHost, sizeof(host));
+            port = gTelemetryUdpPort;
+            taskEXIT_CRITICAL(&gTimeDiagMux);
+            ESP_LOGI(TAG, "telemetry udp: enabled=%d host=%s port=%u cadence=\"sync-events + 5min\"",
+                     (int)enabled, host, (unsigned)port);
+          } else if (strcmp(p, "on") == 0) {
+            taskENTER_CRITICAL(&gTimeDiagMux);
+            gTelemetryUdpEnabled = true;
+            taskEXIT_CRITICAL(&gTimeDiagMux);
+            ESP_LOGI(TAG, "telemetry udp: enabled");
+          } else if (strcmp(p, "off") == 0) {
+            taskENTER_CRITICAL(&gTimeDiagMux);
+            gTelemetryUdpEnabled = false;
+            taskEXIT_CRITICAL(&gTimeDiagMux);
+            ESP_LOGI(TAG, "telemetry udp: disabled");
+          } else if (strcmp(p, "default") == 0) {
+            telemetry_udp_reset_to_default();
+            ESP_LOGI(TAG, "telemetry udp: reset to default host=%s port=%u",
+                     TELEMETRY_DEFAULT_HOST_IPV6, (unsigned)TELEMETRY_DEFAULT_PORT);
+          } else if (strncmp(p, "host ", 5) == 0) {
+            bool ok = telemetry_udp_set_host(p + 5);
+            if (ok) {
+              char host[64] = {};
+              taskENTER_CRITICAL(&gTimeDiagMux);
+              strlcpy(host, gTelemetryUdpHost, sizeof(host));
+              taskEXIT_CRITICAL(&gTimeDiagMux);
+              ESP_LOGI(TAG, "telemetry udp host set: %s", host);
+            } else {
+              ESP_LOGW(TAG, "telemetry udp host set failed");
+            }
+          } else if (strncmp(p, "port ", 5) == 0) {
+            uint32_t port = (uint32_t)strtoul(p + 5, nullptr, 10);
+            bool ok = (port > 0 && port <= 65535 && telemetry_udp_set_port((uint16_t)port));
+            if (ok) {
+              ESP_LOGI(TAG, "telemetry udp port set: %u", (unsigned)port);
+            } else {
+              ESP_LOGW(TAG, "telemetry udp port set failed");
+            }
+          } else {
+            ESP_LOGW(TAG, "telemetry udp format: telemetry udp [host <value>|port <1..65535>|on|off|default]");
+          }
         } else if (strcmp(buf, "timesync now") == 0) {
           bool ok = run_network_rtc_sync(true, "serial-timesync-now", "RTC sync", true);
           ESP_LOGI(TAG, "Time sync command result: %s", ok ? "SUCCESS" : "FAILURE");
+          telemetry_udp_emit("manual-timesync");
         } else if (strcmp(buf, "ntptest sync") == 0) {
           bool ok = run_ntp_rtc_test(true);
           ESP_LOGI(TAG, "NTP test command result: %s", ok ? "SUCCESS" : "FAILURE");
@@ -1991,13 +2644,9 @@ static void handleDisplaySerialCommands() {
                      (unsigned long)sec, (unsigned long)gRtcSyncIntervalMs);
           }
         } else if (strcmp(buf, "timesync") == 0) {
-          ESP_LOGI(TAG,
-                   "Time sync status: commissioned=%d thread=%d net_valid=%d interval_ms=%lu floor_epoch=%ld",
-                   (int)(gCommissioned || is_commissioned()),
-                   (int)gThreadAttached,
-                   (int)gNetTimeValid,
-                   (unsigned long)gRtcSyncIntervalMs,
-                   (long)min_valid_epoch());
+          log_time_sync_state("serial-timesync", true);
+          ESP_LOGI(TAG, "Time sync logging flags: logtime=%d logheap=%d",
+                   (int)gLogTimeEnabled, (int)gHeapDiagEnabled);
         } else if (strcmp(buf, "rebootcause") == 0) {
           char prevTs[32] = {};
           char currTs[32] = {};
@@ -2099,6 +2748,9 @@ static uint16_t scale_brightness(uint16_t als) {
 static void sensor_task(void*) {
   uint32_t lastLuxMs = 0;
   uint32_t lastLogMs = 0;
+  uint32_t lastTimeStateLogMs = 0;
+  uint32_t lastRtcSystemDriftCheckMs = 0;
+  uint32_t lastRtcSystemDriftTriggerMs = 0;
   bool threadConfigured = false;
   while (true) {
     #if !DISABLE_TIME_SYNC
@@ -2129,6 +2781,30 @@ static void sensor_task(void*) {
     size_t heapAfterMatter = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     heap_diag_account(HeapDiagBucket::MatterUpdate, heapBeforeMatter, heapAfterMatter);
     uint32_t now = millis_ms();
+    if (now - lastRtcSystemDriftCheckMs > RTC_SYSTEM_DRIFT_CHECK_MS) {
+      lastRtcSystemDriftCheckMs = now;
+      const bool commissionedReady = (gCommissioned || is_commissioned());
+      if (commissionedReady && gThreadAttached && !gRtcInitialSyncDue &&
+          !is_network_sync_transaction_active() &&
+          (now - lastRtcSystemDriftTriggerMs > RTC_SYSTEM_DRIFT_TRIGGER_COOLDOWN_MS)) {
+        int64_t rtcEpoch = 0;
+        int64_t sysUsec = 0;
+        if (read_rtc_epoch_sec(&rtcEpoch) && read_system_time_us(&sysUsec)) {
+          const int64_t sysEpoch = sysUsec / 1000000LL;
+          const time_t floor = min_valid_epoch();
+          if (rtcEpoch >= (int64_t)floor && sysEpoch >= (int64_t)floor) {
+            const int64_t diff = rtcEpoch - sysEpoch;
+            if (llabs(diff) > (int64_t)RTC_SYSTEM_DRIFT_TRIGGER_SEC) {
+              lastRtcSystemDriftTriggerMs = now;
+              ESP_LOGW(TAG, "RTC/SYS drift trigger: rtc_epoch=%" PRId64 " sys_epoch=%" PRId64
+                       " diff_sec=%" PRId64 " threshold=%ld",
+                       rtcEpoch, sysEpoch, diff, (long)RTC_SYSTEM_DRIFT_TRIGGER_SEC);
+              request_rtc_sync("rtc-system-drift-trigger");
+            }
+          }
+        }
+      }
+    }
     if (now - lastLuxMs > 500) {
       size_t heapBeforeAls = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       if (!DISPLAY_RH_TEST_MODE && !gBrightnessOverride) {
@@ -2156,81 +2832,17 @@ static void sensor_task(void*) {
     size_t heapAfterSerial = heap_caps_get_free_size(MALLOC_CAP_8BIT);
     heap_diag_account(HeapDiagBucket::SerialCmd, heapBeforeSerial, heapAfterSerial);
 
-    if (now - lastLogMs > 5000) {
+    if (now - lastLogMs > 300000) {
       size_t heapBeforeStatusLog = heap_caps_get_free_size(MALLOC_CAP_8BIT);
       uint32_t logWindowMs = now - lastLogMs;
-      ClockTime ct = readClockTime();
-      int h12 = ct.hour % 12;
-      if (h12 == 0) h12 = 12;
-      int year = 0;
-      int mon = 0;
-      int day = 0;
-      time_t rtcEpoch = 0;
-      if (rtc_read_epoch(&rtcEpoch)) {
-        struct tm localTm = {};
-        localtime_r(&rtcEpoch, &localTm);
-        year = localTm.tm_year + 1900;
-        mon = localTm.tm_mon + 1;
-        day = localTm.tm_mday;
-      }
-      time_t sysEpoch = time(nullptr);
-      struct tm sysLocalTm = {};
-      localtime_r(&sysEpoch, &sysLocalTm);
-      int sysHour24 = sysLocalTm.tm_hour;
-      int sysHour12 = sysHour24 % 12;
-      if (sysHour12 == 0) sysHour12 = 12;
-      const char* sysAmPm = (sysHour24 >= 12) ? "PM" : "AM";
-      const UBaseType_t hwmWords = uxTaskGetStackHighWaterMark(nullptr);
-      char tempBuf[16] = "nan";
-      char rhBuf[16] = "nan";
-      if (isfinite(vTempC)) {
-        int tempTenthsF = (int)lroundf((vTempC * 9.0f / 5.0f + 32.0f) * 10.0f);
-        int tempWhole = tempTenthsF / 10;
-        int tempFrac = abs(tempTenthsF % 10);
-        snprintf(tempBuf, sizeof(tempBuf), "%d.%d", tempWhole, tempFrac);
-      }
-      if (isfinite(vHum)) {
-        int rhTenths = (int)lroundf(vHum * 10.0f);
-        int rhWhole = rhTenths / 10;
-        int rhFrac = abs(rhTenths % 10);
-        snprintf(rhBuf, sizeof(rhBuf), "%d.%d", rhWhole, rhFrac);
-      }
-      ESP_LOGI(TAG, "RTC %04d-%02d-%02d %02u:%02u:%02u (%s) | Display %02d:%02d:%02u (%s) | Sys %04d-%02d-%02d %02d:%02d:%02d (%s) | Temp %s F | RH %s%%",
-               year, mon, day,
-               ct.hour, ct.minute, ct.second, ct.pm ? "PM" : "AM",
-               h12, ct.minute, ct.second, ct.pm ? "PM" : "AM",
-               sysLocalTm.tm_year + 1900, sysLocalTm.tm_mon + 1, sysLocalTm.tm_mday,
-               sysHour12, sysLocalTm.tm_min, sysLocalTm.tm_sec, sysAmPm,
-               tempBuf, rhBuf);
-      int64_t lastCompareEpoch = 0;
-      double lastCompareDriftSec = NAN;
-      get_last_ntp_compare(&lastCompareEpoch, &lastCompareDriftSec);
-      if (lastCompareEpoch > 0) {
-        char lastCompareLocal[32] = {};
-        formatEpochLocal(lastCompareEpoch, lastCompareLocal, sizeof(lastCompareLocal));
-        double daysAgo = ((double)sysEpoch - (double)lastCompareEpoch) / 86400.0;
-        if (daysAgo < 0.0) daysAgo = 0.0;
-        int32_t daysAgo100 = (int32_t)lround(daysAgo * 100.0);
-        int32_t daysWhole = daysAgo100 / 100;
-        int32_t daysFrac = abs(daysAgo100 % 100);
-        if (isfinite(lastCompareDriftSec)) {
-          int32_t driftMs = (int32_t)lround(fabs(lastCompareDriftSec) * 1000.0);
-          int32_t driftWhole = driftMs / 1000;
-          int32_t driftFrac = abs(driftMs % 1000);
-          ESP_LOGI(TAG,
-                   "Last NTP compare %ld.%02ld days ago (%s) | Drift %ld.%03ld sec (%s)",
-                   (long)daysWhole, (long)daysFrac, lastCompareLocal,
-                   (long)driftWhole, (long)driftFrac,
-                   (lastCompareDriftSec >= 0.0) ? "RTC behind NTP" : "RTC ahead of NTP");
-        } else {
-          ESP_LOGI(TAG,
-                   "Last NTP compare %ld.%02ld days ago (%s) | Drift unavailable",
-                   (long)daysWhole, (long)daysFrac, lastCompareLocal);
-        }
-      } else {
-        ESP_LOGI(TAG, "Last NTP compare: none yet");
+      log_clock_status_snapshot("periodic");
+      telemetry_udp_emit("periodic-5min");
+      if (gLogTimeEnabled && (now - lastTimeStateLogMs > 30000)) {
+        log_time_sync_state("periodic-soak", false);
+        lastTimeStateLogMs = now;
       }
       if (gHeapDiagEnabled) {
+        const UBaseType_t hwmWords = uxTaskGetStackHighWaterMark(nullptr);
         size_t freeHeap = heap_caps_get_free_size(MALLOC_CAP_8BIT);
         ESP_LOGI(TAG, "Health: free_heap=%uB sensor_stack_hwm=%uB",
                  (unsigned)freeHeap, (unsigned)(hwmWords * sizeof(StackType_t)));
@@ -2266,7 +2878,14 @@ extern "C" void app_main() {
   usb_serial_jtag_driver_config_t usb_cfg = {};
   usb_cfg.rx_buffer_size = 1024;
   usb_cfg.tx_buffer_size = 1024;
-  usb_serial_jtag_driver_install(&usb_cfg);
+  esp_err_t usbErr = usb_serial_jtag_driver_install(&usb_cfg);
+  if (usbErr == ESP_OK) {
+    gUsbSerialReady = true;
+    ESP_LOGI(TAG, "USB Serial JTAG ready; UART0 remains fallback");
+  } else {
+    gUsbSerialReady = false;
+    ESP_LOGW(TAG, "USB Serial JTAG init failed (%s); using UART0", esp_err_to_name(usbErr));
+  }
 #endif
 #if ESP_CLOCK_HAS_OT_LAUNCHER
   init_openthread_platform_config();
@@ -2301,6 +2920,10 @@ extern "C" void app_main() {
     time_t rtc_epoch = 0;
     time_t floor = min_valid_epoch();
     ESP_LOGI(TAG, "Time validity floor epoch: %ld", (long)floor);
+    ESP_LOGI(TAG, "RTC drift watchdog: check_every=%lu s trigger_if_abs_diff_gt=%ld s cooldown=%lu s",
+             (unsigned long)(RTC_SYSTEM_DRIFT_CHECK_MS / 1000UL),
+             (long)RTC_SYSTEM_DRIFT_TRIGGER_SEC,
+             (unsigned long)(RTC_SYSTEM_DRIFT_TRIGGER_COOLDOWN_MS / 1000UL));
     if (rtc_read_epoch(&rtc_epoch)) {
       if (rtc_epoch >= floor) {
         ESP_LOGI(TAG, "Clock source selected: RTC");

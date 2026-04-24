@@ -90,3 +90,21 @@
 ## Security & Configuration Tips
 - Keep Matter credentials, Wi-Fi credentials, and calibration state local or in untracked files.
 - Avoid committing secrets or device identifiers to the repository.
+
+## Codex ESP-IDF Workflow
+- Prefer `idf.py` (ESP-IDF) for this repo; wrapper build script `tools/idf.sh` was **not found**.
+- Canonical project root: `/Users/cwaite/Documents/Coding Projects/ESP-Clock`.
+- Default target: `esp32c6` (from `sdkconfig.defaults`: `CONFIG_IDF_TARGET="esp32c6"`).
+- Default build flow:
+  - `cd "/Users/cwaite/Documents/Coding Projects/ESP-Clock"`
+  - `source "$HOME/esp-idf/export.sh"`
+  - `idf.py set-target esp32c6` (first-time or after target changes)
+  - `idf.py build`
+- Canonical flash/monitor:
+  - `idf.py -p <PORT> flash monitor`
+- Verification command (minimum): `idf.py build` must pass before handoff.
+- Guardrail: do not edit `sdkconfig` manually; change `sdkconfig.defaults` instead.
+- Guardrail: do not modify `managed_components/` directly.
+- Guardrail: do not change `partitions.csv`, `main/idf_component.yml`, or OpenThread/Wi-Fi defaults in `sdkconfig.defaults` unless explicitly requested.
+- Keep legacy Arduino content (`Legacy Arduino Sketches/`) as reference-only unless asked to work there.
+- Failure reporting expectation: report the **first root-cause error** with exact `file:line` and failing command; avoid burying root cause under downstream errors.
