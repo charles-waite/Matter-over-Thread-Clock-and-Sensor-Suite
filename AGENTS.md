@@ -10,10 +10,11 @@
 
 ## Build, Test, and Development Commands
 - Primary toolchain is ESP-IDF (Matter over Thread, with Arduino-ESP32 components as needed).
+- Prefer `./tools/idf.sh ...` for ESP-IDF commands; it enables ccache and sources ESP-IDF if needed.
 - Typical flow:
-  - `idf.py set-target esp32c6`
-  - `idf.py build`
-  - `idf.py -p <port> flash monitor`
+  - `./tools/idf.sh set-target esp32c6`
+  - `./tools/idf.sh build`
+  - `./tools/idf.sh -p <port> flash monitor`
 - On this machine, ESP-Matter builds can take up to ~5 minutes; set build timeouts accordingly.
 - Legacy sketches are reference-only; if needed, build via Arduino IDE or:
   - `arduino-cli compile --fqbn <board_fqbn> "Legacy Arduino Sketches/Clock_StableDisplayandTime"`
@@ -92,17 +93,16 @@
 - Avoid committing secrets or device identifiers to the repository.
 
 ## Codex ESP-IDF Workflow
-- Prefer `idf.py` (ESP-IDF) for this repo; wrapper build script `tools/idf.sh` was **not found**.
+- Prefer `./tools/idf.sh` for ESP-IDF commands; it enables ccache via `IDF_CCACHE_ENABLE=1`.
 - Canonical project root: `/Users/cwaite/Documents/Coding Projects/ESP-Clock`.
 - Default target: `esp32c6` (from `sdkconfig.defaults`: `CONFIG_IDF_TARGET="esp32c6"`).
 - Default build flow:
   - `cd "/Users/cwaite/Documents/Coding Projects/ESP-Clock"`
-  - `source "$HOME/esp-idf/export.sh"`
-  - `idf.py set-target esp32c6` (first-time or after target changes)
-  - `idf.py build`
+  - `./tools/idf.sh set-target esp32c6` (first-time or after target changes)
+  - `./tools/idf.sh build`
 - Canonical flash/monitor:
-  - `idf.py -p <PORT> flash monitor`
-- Verification command (minimum): `idf.py build` must pass before handoff.
+  - `./tools/idf.sh -p <PORT> flash monitor`
+- Verification command (minimum): `./tools/idf.sh build` must pass before handoff.
 - Guardrail: do not edit `sdkconfig` manually; change `sdkconfig.defaults` instead.
 - Guardrail: do not modify `managed_components/` directly.
 - Guardrail: do not change `partitions.csv`, `main/idf_component.yml`, or OpenThread/Wi-Fi defaults in `sdkconfig.defaults` unless explicitly requested.
