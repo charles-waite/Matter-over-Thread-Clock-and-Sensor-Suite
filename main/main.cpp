@@ -82,8 +82,14 @@
 #if __has_include("esp_matter.h")
 #include "esp_matter.h"
 #include <app/server/Server.h>
+#include <app/clusters/ota-requestor/BDXDownloader.h>
+#include <app/clusters/ota-requestor/DefaultOTARequestor.h>
+#include <app/clusters/ota-requestor/DefaultOTARequestorDriver.h>
+#include <app/clusters/ota-requestor/DefaultOTARequestorStorage.h>
+#include <app/clusters/ota-requestor/OTARequestorInterface.h>
 #include <app/util/attribute-table.h>
 #include <app-common/zap-generated/attribute-type.h>
+#include <platform/ESP32/OTAImageProcessorImpl.h>
 #include <platform/PlatformManager.h>
 #if __has_include("platform/ESP32/OpenthreadLauncher.h")
 #include "platform/ESP32/OpenthreadLauncher.h"
@@ -95,6 +101,14 @@
 #else
 #define ESP_CLOCK_HAS_MATTER 0
 #define ESP_CLOCK_HAS_OT_LAUNCHER 0
+#endif
+
+#if ESP_CLOCK_HAS_MATTER && CONFIG_ENABLE_OTA_REQUESTOR
+static chip::DefaultOTARequestor sOtaRequestor;
+static chip::DeviceLayer::DefaultOTARequestorDriver sOtaDriver;
+static chip::DefaultOTARequestorStorage sOtaStorage;
+static chip::BDXDownloader sOtaDownloader;
+static chip::OTAImageProcessorImpl sOtaImageProcessor;
 #endif
 
 // -------------------- Logging --------------------
@@ -1033,6 +1047,32 @@ static void matter_event_callback(const ChipDeviceEvent* event, intptr_t) {
 
 #endif
 
+static bool init_ota_requestor() {
+#if ESP_CLOCK_HAS_MATTER && CONFIG_ENABLE_OTA_REQUESTOR
+  chip::DeviceLayer::PlatformMgr().LockChipStack();
+  chip::Server& server = chip::Server::GetInstance();
+  sOtaStorage.Init(server.GetPersistentStorage());
+  chip::SetRequestorInstance(&sOtaRequestor);
+
+  CHIP_ERROR err = sOtaRequestor.Init(server, sOtaStorage, sOtaDriver, sOtaDownloader);
+  if (err != CHIP_NO_ERROR) {
+    chip::DeviceLayer::PlatformMgr().UnlockChipStack();
+    ESP_LOGE(TAG, "Matter OTA Requestor init failed: %" CHIP_ERROR_FORMAT, err.Format());
+    return false;
+  }
+
+  sOtaDriver.Init(&sOtaRequestor, &sOtaImageProcessor);
+  sOtaImageProcessor.SetOTADownloader(&sOtaDownloader);
+  sOtaDownloader.SetImageProcessorDelegate(&sOtaImageProcessor);
+  chip::DeviceLayer::PlatformMgr().UnlockChipStack();
+
+  ESP_LOGI(TAG, "Matter OTA Requestor initialized on endpoint 0");
+  return true;
+#else
+  return true;
+#endif
+}
+
 static void matter_init() {
 #if ESP_CLOCK_HAS_MATTER
   using namespace esp_matter;
@@ -1080,12 +1120,34 @@ static void matter_init() {
     matterCo2Enabled = true;
   }
 
+  endpoint_t* root_ep = endpoint::get(node, 0);
+  if (root_ep) {
+    esp_matter::endpoint::add_device_type(root_ep,
+                                          ESP_MATTER_OTA_REQUESTOR_DEVICE_TYPE_ID,
+                                          ESP_MATTER_OTA_REQUESTOR_DEVICE_TYPE_VERSION);
+
+    cluster::binding::config_t binding_cfg;
+    cluster::binding::create(root_ep, &binding_cfg, CLUSTER_FLAG_SERVER);
+
+    cluster::ota_requestor::config_t ota_cfg;
+    cluster_t* ota_provider_cluster = cluster::ota_provider::create(root_ep, nullptr, CLUSTER_FLAG_CLIENT);
+    cluster_t* ota_requestor_cluster = cluster::ota_requestor::create(root_ep, &ota_cfg, CLUSTER_FLAG_SERVER);
+    if (!ota_provider_cluster || !ota_requestor_cluster) {
+      ESP_LOGW(TAG, "Matter OTA root clusters incomplete");
+    }
+  } else {
+    ESP_LOGW(TAG, "Matter root endpoint lookup failed; OTA requestor not exposed");
+  }
+
   esp_err_t err = esp_matter::start(matter_event_callback);
   if (err != ESP_OK) {
     ESP_LOGE(TAG, "Matter start failed: %s", esp_err_to_name(err));
     return;
   }
-  ESP_LOGI(TAG, "Matter started (temp=%u hum=%u air=%u)",
+  if (!init_ota_requestor()) {
+    ESP_LOGE(TAG, "Matter OTA Requestor runtime init failed");
+  }
+  ESP_LOGI(TAG, "Matter started (temp=%u hum=%u air=%u ota=1)",
            matterTempEndpoint, matterHumEndpoint, matterAirEndpoint);
 #else
   ESP_LOGW(TAG, "esp-matter not configured; Matter disabled");
