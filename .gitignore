@@ -20,3 +20,8 @@ sdkconfig.old
 
 # Local tools/cache
 .cache/
+
+# Local/reference artifacts
+resources/Logs/
+resources/logs/
+Legacy Arduino Sketches/
